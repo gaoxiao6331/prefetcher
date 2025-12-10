@@ -1,0 +1,30 @@
+{
+    "name": "prefetcher",
+    "version": "1.0.0",
+    "description": "Prefetcher service with Fastify and TypeScript",
+    "main": "dist/index.js",
+    "scripts": {
+        "dev": "nodemon",
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "clean": "rm -rf dist"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@fastify/sensible": "^5.5.0",
+        "fastify": "^4.26.1",
+        "fastify-metrics": "^10.0.0",
+        "fastify-plugin": "^5.1.0",
+        "pino": "^8.19.0",
+        "puppeteer": "^24.27.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.19",
+        "nodemon": "^3.0.3",
+        "pino-pretty": "^10.3.1",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.3.3"
+    }
+}
