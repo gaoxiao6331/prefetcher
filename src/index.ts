@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { fastify } from 'fastify';
 import sensible from '@fastify/sensible';
 import monitorPlugin from './plugins/monitor';
 import loggerPlugin from './plugins/logger';
@@ -40,7 +40,7 @@ const start = async () => {
   });
 
   try {
-    const port = parseInt(process.env.PORT || '3000', 10);
+    const port = fastify.config.port ?? 3000;
     const host = '0.0.0.0';
     await fastify.listen({ port, host });
     console.log(`Server listening on http://localhost:${port}`);
