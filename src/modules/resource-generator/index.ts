@@ -3,7 +3,8 @@ import routes from './route';
 import ResourceGeneratorService from './service';
 
 const resourceGeneratorModule: FastifyPluginAsync = async (fastify, opts) => {
-  fastify.decorate('resourceGeneratorService', new ResourceGeneratorService());
+  const resourceGeneratorService = await ResourceGeneratorService.create()
+  fastify.decorate('resourceGeneratorService', resourceGeneratorService);
   await fastify.register(routes);
 };
 

@@ -9,7 +9,10 @@ const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
     schema: createResourceSchema,
   }, async (request, reply) => {
     const { targetUrl } = request.body;
-    return { message: `hello, ${targetUrl}` };
+    const list = await resourceGeneratorService.captureResources(targetUrl);
+    return {
+      message: list.toString()
+    };
   });
 };
 
