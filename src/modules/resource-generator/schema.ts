@@ -1,31 +1,12 @@
-// schemas/prefetch.ts
-export default {
-  body: {
-    type: 'object',
-    required: ['targetUrl'],
-    properties: {
-      targetUrl: {
-        type: 'string',
-        minLength: 1
-      }
-    },
-    additionalProperties: false
-  },
+import { z } from 'zod';
+
+export const createResourceSchema = {
+  body: z.object({
+    targetUrl: z.string().min(1),
+  }),
   response: {
-    '2xx': {
-      type: 'object',
-      properties: { message: { type: 'string' } },
-      required: ['message']
-    },
-    '4xx': {
-      type: 'object',
-      properties: { message: { type: 'string' } },
-      required: ['message']
-    },
-    '5xx': {
-      type: 'object',
-      properties: { message: { type: 'string' } },
-      required: ['message']
-    }
-  }
+    200: z.object({
+      message: z.string(),
+    }),
+  },
 };

@@ -3,6 +3,7 @@ import sensible from '@fastify/sensible';
 import monitorPlugin from './plugins/monitor';
 import loggerPlugin from './plugins/logger';
 import resourceGeneratorModule from './modules/resource-generator';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 
 const start = async () => {
   const fastify = Fastify({
@@ -19,6 +20,10 @@ const start = async () => {
 
   // Register core plugins
   await fastify.register(sensible);
+
+  // Set up Zod validation
+  fastify.setValidatorCompiler(validatorCompiler);
+  fastify.setSerializerCompiler(serializerCompiler);
 
   // Register custom plugins
   await fastify.register(loggerPlugin);

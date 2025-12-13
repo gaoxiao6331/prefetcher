@@ -1,17 +1,17 @@
 import { FastifyPluginAsync } from 'fastify';
-import schema from './schema';
-
-interface CreateResourceBody {
-  targetUrl: string;
-}
+import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { createResourceSchema } from './schema';
 
 const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
-  fastify.post<{ Body: CreateResourceBody }>('/res_gen', {
-    schema,
+  const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  app.post('/res_gen', {
+    schema: createResourceSchema,
   }, async (request, reply) => {
     const { targetUrl } = request.body;
-    return { message: `Request received for ${targetUrl}` };
+    return { message: `hello, ${targetUrl}` };
   });
 };
 
 export default sniffRoutes;
+
