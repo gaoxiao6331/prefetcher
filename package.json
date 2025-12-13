@@ -9,7 +9,8 @@
         "start": "node dist/index.js",
         "run:test": "pnpm build && cross-env NODE_ENV=test pnpm start",
         "run:prod": "pnpm build && cross-env NODE_ENV=production pnpm start",
-        "clean": "rm -rf dist"
+        "clean": "rm -rf dist",
+        "format": "biome format --write ."
     },
     "keywords": [],
     "author": "",
@@ -25,6 +26,7 @@
         "zod": "3.23.8"
     },
     "devDependencies": {
+        "@biomejs/biome": "^2.3.8",
         "@types/node": "^20.11.19",
         "cross-env": "^10.1.0",
         "nodemon": "^3.0.3",

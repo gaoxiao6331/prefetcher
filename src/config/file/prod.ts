@@ -1,8 +1,8 @@
 import { Config } from "../type";
 
 const config: Config = {
-    env: 'prod',
-    port: 3000,
-}
+	env: "prod",
+	port: 3000,
+};
 
-export default config
+export default config;
