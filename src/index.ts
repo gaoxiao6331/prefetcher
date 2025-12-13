@@ -17,6 +17,7 @@ const start = async () => {
 				options: {
 					translateTime: "HH:MM:ss Z",
 					ignore: "pid,hostname",
+					colorize: true,
 				},
 			},
 		},
@@ -34,15 +35,15 @@ const start = async () => {
 	await fastify.register(monitorPlugin);
 	await fastify.register(configPlugin);
 
-	// Register business modules
-	await fastify.register(resourceGeneratorModule);
-
 	// Global Error Handler Stub for Alerting
 	fastify.setErrorHandler((error, request, reply) => {
-		fastify.log.error(error, `Request failed: ${error.message}`);
+		fastify.log.error(error, `[GLOBAL]: Request failed: ${error.message}`);
 		// Here we would send alerts to Sentry/PagerDuty etc.
 		reply.send(error);
 	});
+
+	// Register business modules
+	await fastify.register(resourceGeneratorModule);
 
 	try {
 		const port = fastify.config.port ?? 3000;
@@ -53,6 +54,28 @@ const start = async () => {
 		fastify.log.error(err);
 		process.exit(1);
 	}
+
+	// 捕获终止信号（如 Ctrl+C 或 Kubernetes 发出的 SIGTERM）
+	process.on("SIGTERM", async () => {
+		fastify.log.info("shutting down gracefully...");
+		try {
+			await fastify.close(); // Fastify 会等待现有请求处理完毕后再关闭
+			fastify.log.info("Server shut down gracefully");
+			process.exit(0);
+		} catch (error: any) {
+			fastify.log.error("Error during shutdown:", error);
+			process.exit(1);
+		}
+	});
+
+	process.on("unhandledRejection", (reason, promise) => {
+		fastify.log.error(reason, "Unhandled Rejection occurred");
+	});
+
+	// 捕获未处理的异常
+	process.on("uncaughtException", (error) => {
+		fastify.log.error(error, "Uncaught Exception occurred");
+	});
 };
 
 start();

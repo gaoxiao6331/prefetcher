@@ -14,7 +14,7 @@ const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
 			const { targetUrl } = request.body;
 			const list = await resourceGeneratorService.captureResources(targetUrl);
 			return {
-				message: list.toString(),
+				message: JSON.stringify(list),
 			};
 		},
 	);
