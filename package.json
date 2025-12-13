@@ -6,7 +6,9 @@
     "scripts": {
         "dev": "NODE_ENV=development nodemon",
         "build": "tsc",
-        "preview": "NODE_ENV=production pnpm build && node dist/index.js",
+        "start": "node dist/index.js",
+        "run:test": "NODE_ENV=test pnpm build && pnpm start",
+        "run:prod": "NODE_ENV=production pnpm build && pnpm start",
         "clean": "rm -rf dist"
     },
     "keywords": [],
