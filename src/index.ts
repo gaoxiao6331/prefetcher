@@ -2,6 +2,7 @@ import Fastify, { fastify } from 'fastify';
 import sensible from '@fastify/sensible';
 import monitorPlugin from './plugins/monitor';
 import loggerPlugin from './plugins/logger';
+import configPlugin from './plugins/config';
 import resourceGeneratorModule from './modules/resource-generator';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 
@@ -28,6 +29,7 @@ const start = async () => {
   // Register custom plugins
   await fastify.register(loggerPlugin);
   await fastify.register(monitorPlugin);
+  await fastify.register(configPlugin);
 
   // Register business modules
   await fastify.register(resourceGeneratorModule);

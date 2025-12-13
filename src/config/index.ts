@@ -10,7 +10,4 @@ const configMap = {
     'production': prod
 }
 
-
-
 export default configMap[env] ?? prod
-
