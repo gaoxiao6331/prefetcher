@@ -2,14 +2,14 @@
 export default {
   body: {
     type: 'object',
-    required: ['targetUrl'], // 👈 已声明为必填
+    required: ['targetUrl'],
     properties: {
-      targetUrl: { 
+      targetUrl: {
         type: 'string',
-        minLength: 1 // 可选：防止空字符串
+        minLength: 1
       }
     },
-    additionalProperties: false // 可选：禁止传多余字段
+    additionalProperties: false
   },
   response: {
     '2xx': {
