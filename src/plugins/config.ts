@@ -1,6 +1,7 @@
 // src/plugins/config.ts
-import fp from "fastify-plugin";
+
 import type { FastifyInstance } from "fastify";
+import fp from "fastify-plugin";
 import config from "../config";
 
 declare module "fastify" {

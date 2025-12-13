@@ -1,5 +1,5 @@
-import puppeteer, { Browser } from "puppeteer";
-import { CapturedResource } from "./type";
+import puppeteer, { type Browser } from "puppeteer";
+import type { CapturedResource } from "./type";
 
 class ResourceGeneratorService {
 	private browser: Browser | null = null;

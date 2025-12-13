@@ -1,13 +1,13 @@
-import Fastify, { fastify } from "fastify";
 import sensible from "@fastify/sensible";
-import monitorPlugin from "./plugins/monitor";
-import loggerPlugin from "./plugins/logger";
-import configPlugin from "./plugins/config";
-import resourceGeneratorModule from "./modules/resource-generator";
+import Fastify from "fastify";
 import {
 	serializerCompiler,
 	validatorCompiler,
 } from "fastify-type-provider-zod";
+import resourceGeneratorModule from "./modules/resource-generator";
+import configPlugin from "./plugins/config";
+import loggerPlugin from "./plugins/logger";
+import monitorPlugin from "./plugins/monitor";
 
 const start = async () => {
 	const fastify = Fastify({

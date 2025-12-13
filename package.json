@@ -10,7 +10,8 @@
         "run:test": "pnpm build && cross-env NODE_ENV=test pnpm start",
         "run:prod": "pnpm build && cross-env NODE_ENV=production pnpm start",
         "clean": "rm -rf dist",
-        "format": "biome format --write ."
+        "format": "biome format --write .",
+        "fix": "biome check --fix ."
     },
     "keywords": [],
     "author": "",
