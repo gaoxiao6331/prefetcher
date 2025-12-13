@@ -4,8 +4,9 @@
     "description": "Prefetcher service with Fastify and TypeScript",
     "main": "dist/index.js",
     "scripts": {
-        "dev": "nodemon",
+        "dev": "NODE_ENV=development nodemon",
         "build": "tsc",
+        "preview": "NODE_ENV=production pnpm build && node dist/index.js",
         "clean": "rm -rf dist"
     },
     "keywords": [],
