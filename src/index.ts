@@ -3,7 +3,6 @@ import jsDelivrServiceModule from "@/modules/cdn-updater";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 
 const start = async () => {
-
 	const fastify = await createFastifyInstance();
 
 	// Register business modules

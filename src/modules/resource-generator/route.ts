@@ -5,16 +5,19 @@ import { createResourceSchema } from "./schema";
 const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
 	const app = fastify.withTypeProvider<ZodTypeProvider>();
 	const resourceGeneratorService = fastify.resourceGeneratorService;
+	const cdnUpdaterService = fastify.cdnUpdaterService;
+
 	app.post(
 		"/res_gen",
 		{
 			schema: createResourceSchema,
 		},
 		async (request, reply) => {
-			const { targetUrl } = request.body;
+			const { targetUrl, projectName, targetFileName } = request.body;
 			const list = await resourceGeneratorService.captureResources(targetUrl);
+			await cdnUpdaterService.update(projectName, targetFileName, JSON.stringify(list));
 			return {
-				message: JSON.stringify(list),
+				message: "Success",
 			};
 		},
 	);

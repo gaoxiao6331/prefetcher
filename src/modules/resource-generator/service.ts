@@ -3,16 +3,17 @@ import type { CapturedResource } from "./type";
 import type { FastifyInstance } from "fastify";
 
 class ResourceGeneratorService {
-	private browser: Browser | null = null;
-
 	private readonly requestHeader = "x-prefetcher-req-id";
 
-	private constructor(private readonly fastify: FastifyInstance) {}
+	private constructor(
+		private readonly fastify: FastifyInstance,
+		private readonly browser: Browser,
+	) {}
 
-	private async init() {
-		const headless = this.fastify.config.env !== "dev";
+	static async create(fastify: FastifyInstance) {
+		const headless = fastify.config.env !== "dev";
 
-		this.browser = await puppeteer.launch({
+		const browser = await puppeteer.launch({
 			headless,
 			args: [
 				"--disable-gpu", // 主要参数：禁用GPU硬件加速
@@ -20,11 +21,7 @@ class ResourceGeneratorService {
 			executablePath:
 				"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // TODO 使用系统已安装的Chrome
 		});
-	}
-
-	static async create(fastify: FastifyInstance) {
-		const service = new ResourceGeneratorService(fastify);
-		await service.init();
+		const service = new ResourceGeneratorService(fastify, browser);
 		return service;
 	}
 
@@ -40,7 +37,7 @@ class ResourceGeneratorService {
 
 	private async getPage() {
 		if (!this.browser) throw new Error("Browser is not initialized");
-		const page = await this.browser!.newPage();
+		const page = await this.browser.newPage();
 		await page.setRequestInterception(true);
 
 		return {
@@ -117,7 +114,7 @@ class ResourceGeneratorService {
 		await Promise.race([eventError, page.goto(url)]);
 
 		const res = this.rank(this.filter(capturedResources));
-		return res;
+		return res.map((r) => r.url);
 	}
 }
 

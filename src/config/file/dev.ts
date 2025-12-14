@@ -9,7 +9,6 @@ const config: Config = {
 			remoteAddr: "https://github.com/gaoxiao6331/cdn-test",
 		},
 	},
-	
 };
 
 export default config;

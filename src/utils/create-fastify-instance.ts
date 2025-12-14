@@ -8,21 +8,20 @@ import loggerPlugin from "../plugins/logger";
 import monitorPlugin from "../plugins/monitor";
 import configPlugin from "../plugins/config";
 
-
 export default async function createFastifyInstance() {
-	    const fastify = Fastify({
-            logger: {
-				file: './logs/app.log',
-                transport: {
-                    target: "pino-pretty",
-                    options: {
-                        translateTime: "HH:MM:ss Z",
-                        ignore: "pid,hostname",
-                        colorize: true,
-                    },
-                },
-            },
-        });
+	const fastify = Fastify({
+		logger: {
+			file: "./logs/app.log",
+			transport: {
+				target: "pino-pretty",
+				options: {
+					translateTime: "HH:MM:ss Z",
+					ignore: "pid,hostname",
+					colorize: true,
+				},
+			},
+		},
+	});
 
 	// Register core plugins
 	await fastify.register(sensible);
@@ -43,5 +42,5 @@ export default async function createFastifyInstance() {
 		reply.send(error);
 	});
 
-        return fastify
+	return fastify;
 }

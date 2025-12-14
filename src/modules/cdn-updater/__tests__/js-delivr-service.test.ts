@@ -14,10 +14,7 @@ describe("JsDelivrService", () => {
     });
 
     test("no error", async () => {
-        const {localPath, remoteAddr} = fastify.config.cdn?.jsDelivr || {};
-        expect(localPath).not.toBeUndefined();
-        expect(remoteAddr).not.toBeUndefined();
         const now = Date.now();
-        await jsDelivrService.update(remoteAddr!, localPath!, 'dev-test', 'demo.js', `const a=${now};`);
+        await jsDelivrService.update(dev-test', 'demo.js', `const a=${now};`);
     }, 60_000);
 });
