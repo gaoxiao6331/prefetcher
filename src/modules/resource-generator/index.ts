@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import fp from "fastify-plugin";
 import routes from "./route";
 import ResourceGeneratorService from "./service";
 
@@ -15,4 +16,4 @@ declare module "fastify" {
 	}
 }
 
-export default resourceGeneratorModule;
+export default fp(resourceGeneratorModule);

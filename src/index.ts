@@ -1,4 +1,4 @@
-import jsDelivrServiceModule from "@/modules/cdn-updater";
+import cdnUpdaterModule from "@/modules/cdn-updater";
 import resourceGeneratorModule from "@/modules/resource-generator";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 
@@ -7,7 +7,7 @@ const start = async () => {
 
 	// Register business modules
 	await fastify.register(resourceGeneratorModule);
-	await fastify.register(jsDelivrServiceModule);
+	await fastify.register(cdnUpdaterModule);
 
 	try {
 		const port = fastify.config.port ?? 3000;

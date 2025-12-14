@@ -64,6 +64,8 @@ class ResourceGeneratorService {
 
 			page.on("request", (request) => {
 				try {
+					// 只处理get请求
+					if (request.method() !== "GET") return;
 					id++;
 					request.continue({
 						headers: {
@@ -84,6 +86,8 @@ class ResourceGeneratorService {
 
 			page.on("response", async (response) => {
 				try {
+					// 只处理get请求
+					if (response.request().method() !== "GET") return;
 					const url = response.url();
 					const status = response.status();
 					const resourceType = response.request().resourceType();
