@@ -12,6 +12,7 @@ import configPlugin from "../plugins/config";
 export default async function createFastifyInstance() {
 	    const fastify = Fastify({
             logger: {
+				file: './logs/app.log',
                 transport: {
                     target: "pino-pretty",
                     options: {

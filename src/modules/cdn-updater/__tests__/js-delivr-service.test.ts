@@ -10,12 +10,14 @@ describe("JsDelivrService", () => {
 
     beforeAll(async () => {
         fastify = await createFastifyInstance();
-        jsDelivrService = JsDelivrService.create(fastify);
+        jsDelivrService = await JsDelivrService.create(fastify);
     });
 
     test("no error", async () => {
-        const repo = fastify.config.cdn?.jsDelivr?.repo;
-        expect(repo).not.toBeUndefined();
-        await jsDelivrService.update(repo!, 'dev-test', 'demo.js', `const a=123;`);
-    });
+        const {localPath, remoteAddr} = fastify.config.cdn?.jsDelivr || {};
+        expect(localPath).not.toBeUndefined();
+        expect(remoteAddr).not.toBeUndefined();
+        const now = Date.now();
+        await jsDelivrService.update(remoteAddr!, localPath!, 'dev-test', 'demo.js', `const a=${now};`);
+    }, 60_000);
 });

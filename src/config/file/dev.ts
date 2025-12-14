@@ -5,7 +5,8 @@ const config: Config = {
 	port: 3000,
 	cdn: {
 		jsDelivr: {
-			repo: "../cdn-test",
+			localPath: "../cdn-test",
+			remoteAddr: "https://github.com/gaoxiao6331/cdn-test",
 		},
 	},
 	

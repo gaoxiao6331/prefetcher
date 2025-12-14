@@ -12,7 +12,7 @@
         "clean": "rm -rf dist",
         "format": "biome format --write .",
         "fix": "biome check --fix .",
-        "test": "jest"
+        "test": "cross-env NODE_ENV=development jest --verbose"
     },
     "keywords": [],
     "author": "",

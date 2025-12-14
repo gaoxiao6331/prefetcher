@@ -11,32 +11,60 @@ class JsDelivrService {
 
     }
 
-    static create(fastify: FastifyInstance) {
-        return new JsDelivrService(fastify);
+    static async create(fastify: FastifyInstance) {
+        const instance = new JsDelivrService(fastify);
+        await instance.initGit();
+        return instance;
     }
 
-   async update(repoPath: string, projectName: string, fileName: string, content: string) {
-        // 1. 检查repoPath是否存在，不存在直接抛异常, 这里的path可能是相对路径，也可能是绝对路径
-        if (!fs.existsSync(path.resolve(repoPath))) {
-            throw new Error(`Repository path does not exist: ${repoPath}`);
+    async initGit() {
+        // Set git user info
+        await execPromise(`git config user.name "prefetch bot"`);
+        await execPromise(`git config user.email "gaoxiao6331@163.com"`);
+    }
+
+    parseRepoInfo(remoteAddr: string) {
+        // 解析github远程仓库的用户名和项目名 eg：https://github.com/gaoxiao6331/cdn-test
+        const match = remoteAddr.match(/https:\/\/github.com\/([^\/]+)\/([^\/]+)/)
+        if (!match) {
+            throw new Error('Invalid github remote address');
+        }
+        const [_, namespace, projectName] = match;
+        return { namespace, projectName };
+    }
+
+    // 把content更新到localPath下，目录结构为localPath/dirName/fileName，并推送到远程仓库
+   async update(remoteAddr: string, localPath: string, dirName: string, fileName: string, content: string) {
+
+        // 1. 检查localPath是否存在，不存在从远程拉取
+        const resolvedLocalPath = path.resolve(localPath);
+        if (!fs.existsSync(resolvedLocalPath)) {
+            // git 拉取remoteAddr到resolvedLocalPath
+            await execPromise(`git clone "${remoteAddr}" "${resolvedLocalPath}"`);
         }
 
-        // 2. 检查repoPath下是否存在projectName和fileName，不存在就创建
-        const projectPath = path.join(repoPath, projectName);
-        if (!fs.existsSync(projectPath)) {
-            fs.mkdirSync(projectPath, { recursive: true });
+        // 2. 检查localPath下是否存在projectName和fileName，不存在就创建
+        const resolvedDirPath = path.join(resolvedLocalPath, dirName);
+        if (!fs.existsSync(resolvedDirPath)) {
+            fs.mkdirSync(resolvedDirPath, { recursive: true });
         }
         
-        const filePath = path.join(projectPath, fileName);
+        const resolvedFilePath = path.join(resolvedDirPath, fileName);
+        const relativeFilePath = `${dirName}/${fileName}`
+
+         // 检查文件是否存在
+        if (!fs.existsSync(resolvedFilePath)) {
+            fs.writeFileSync(resolvedFilePath, '');
+        }
         
         // 3. 检查当前file对应的git commit tag作为版本号
         let version = 1;
         try {
             // Try to get the latest tag for this file
-            const tags = await this.getLatestTags(projectPath, fileName);
+            const tags = await this.getLatestTags(resolvedLocalPath, fileName);
             if (tags.length > 0) {
                 const latestTag = tags[0];
-                const match = latestTag.match(new RegExp(`${projectName}-${fileName}-(\\d+)`));
+                const match = latestTag.match(new RegExp(`${dirName}-${fileName}-(\\d+)`));
                 if (match) {
                     version = parseInt(match[1], 10) + 1;
                 }
@@ -47,20 +75,24 @@ class JsDelivrService {
         }
 
         // 4. 初始版本号为{projectName}-{filename}-1，如果上一步没有获取到tag就使用初始值，否则最后的数字+1
-        const versionTag = `${projectName}-${fileName}-${version}`;
+        const versionTag = `${dirName}-${fileName}-${version}`;
         
         // Write the content to the file
-        fs.writeFileSync(filePath, content);
+        fs.writeFileSync(resolvedFilePath, content);
         
         // 5. 将content的内容写入文件，通过git 提交，内容为"update: {版本号}"
-        await this.gitAddCommitAndPush(repoPath, filePath, versionTag);
+        await this.gitAddCommitAndPush(resolvedLocalPath, resolvedFilePath, versionTag);
         
+        const {
+            namespace,
+            projectName
+        } = this.parseRepoInfo(remoteAddr);
         
         // 7. 手动刷新js delivr的cdn
-        await this.purgeJsDelivrCache(projectName, fileName);
+        await this.purgeJsDelivrCache(namespace, projectName, versionTag, relativeFilePath);
         
         // 8. 检查内容是否更新
-        await this.verifyContentUpdate(projectName, fileName, content);
+        await this.verifyContentUpdate(namespace, projectName, versionTag, relativeFilePath, content);
     }
 
     private async getLatestTags(projectPath: string, fileName: string): Promise<string[]> {
@@ -73,55 +105,62 @@ class JsDelivrService {
         }
     }
 
-    private async gitAddCommitAndPush(repoPath: string, filePath: string, versionTag: string): Promise<void> {
-        try {
-            // Add file to git
-            await execPromise(`cd "${repoPath}" && git add "${filePath}"`);
+    private async gitAddCommitAndPush(localPath: string, filePath: string, versionTag: string): Promise<void> {
+            // Make sure both paths are resolved to absolute paths
+            const resolvedLocalPath = path.resolve(localPath);
+            const resolvedFilePath = path.resolve(filePath);
+            
+            // Get the path relative to the repository root for git operations
+            const relativeFilePath = path.relative(resolvedLocalPath, resolvedFilePath);
+            
+            // Add file to git using the relative path
+            await execPromise(`cd "${resolvedLocalPath}" && git add "${relativeFilePath}"`);
+            
+            // Check if there are changes to commit
+            const { stdout: statusOutput } = await execPromise(`cd "${resolvedLocalPath}" && git status --porcelain`);
+            if (statusOutput.trim() === '') {
+                this.fastify.log.info('No changes to commit');
+                return;
+            }
             
             // Commit with version tag message
-            await execPromise(`cd "${repoPath}" && git commit -m "update: ${versionTag}"`);
+            await execPromise(`cd "${resolvedLocalPath}" && git commit -m "update: ${versionTag}"`);
             
             // Push to remote repository
-            await execPromise(`cd "${repoPath}" && git push origin HEAD`);
+            await execPromise(`cd "${resolvedLocalPath}" && git push origin HEAD`);
             
             // Create and push tag
-            await execPromise(`cd "${repoPath}" && git tag "${versionTag}"`);
-            await execPromise(`cd "${repoPath}" && git push origin "${versionTag}"`);
-        } catch (error) {
-            const err = error as Error;
-            this.fastify.log.error(err, 'Error during git operations');
-            throw new Error(`Git operations failed: ${err.message}`);
-        }
+            await execPromise(`cd "${resolvedLocalPath}" && git tag "${versionTag}"`);
+            await execPromise(`cd "${resolvedLocalPath}" && git push origin "${versionTag}"`);
     }
 
-    private async purgeJsDelivrCache(projectName: string, fileName: string): Promise<void> {
-        try {
+    private async purgeJsDelivrCache(namespace: string, projectName: string, version: string, relativeFilePath: string): Promise<void> {
             // Using jsDelivr purge API
-            const url = `https://purge.jsdelivr.net/gh/${projectName}/${fileName}`;
-            await execPromise(`curl -X POST "${url}"`);
-        } catch (error) {
-            this.fastify.log.warn(error as Error, 'Failed to purge jsDelivr cache');
-            // Don't throw error as this shouldn't stop the update process
-            // TODO alert administrator or take other appropriate action
-        }
+            const url = `https://purge.jsdelivr.net/gh/${namespace}/${projectName}@${version}/${relativeFilePath}`;
+            this.fastify.log.info(`Purging jsDelivr cache: ${url}`);
+            const res = await execPromise(`curl -s "${url}"`);
+            // 检查返回的status 是否是finished
+            if (res.stdout.includes('finished')) {
+                this.fastify.log.info(`jsDelivr cache purge completed: ${url}`);
+            } else {
+                throw new Error(`jsDelivr cache purge failed: ${url}, ${res.stdout}`);
+            }
     }
 
-    private async verifyContentUpdate(projectName: string, fileName: string, content: string): Promise<void> {
-        try {
-            // Give some time for the CDN to update
-            await new Promise(resolve => setTimeout(resolve, 5000));
+    private async verifyContentUpdate(namespace: string, projectName: string, version: string,relativeFilePath: string, content: string): Promise<void> {
             
             // Check if content is available via jsDelivr
-            const url = `https://cdn.jsdelivr.net/gh/${projectName}/${fileName}`;
+            const url = `https://cdn.jsdelivr.net/gh/${namespace}/${projectName}@${version}/${relativeFilePath}`;
+            this.fastify.log.info(`Verifying content update: ${url}`);
             const { stdout } = await execPromise(`curl -s "${url}"`);
             
             if (stdout !== content) {
-                this.fastify.log.warn('Content verification failed: content mismatch');
+                this.fastify.log.warn({
+                    expected: content,
+                    got: stdout,
+                },'Content verification failed: content mismatch');
+                throw new Error('Content verification failed: content mismatch');
             }
-        } catch (error) {
-            this.fastify.log.warn(error as Error, 'Content verification failed');
-            // TODO alert administrator or take other appropriate action
-        }
     }
 }
 

@@ -3,7 +3,8 @@ export interface Config {
 	port: number;
     cdn?: {
         jsDelivr?: {
-            repo: string;
+            localPath: string;
+            remoteAddr: string
         };
     }
 }
