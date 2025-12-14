@@ -1,0 +1,46 @@
+import Fastify from "fastify";
+import sensible from "@fastify/sensible";
+import {
+	serializerCompiler,
+	validatorCompiler,
+} from "fastify-type-provider-zod";
+import loggerPlugin from "../plugins/logger";
+import monitorPlugin from "../plugins/monitor";
+import configPlugin from "../plugins/config";
+
+
+export default async function createFastifyInstance() {
+	    const fastify = Fastify({
+            logger: {
+                transport: {
+                    target: "pino-pretty",
+                    options: {
+                        translateTime: "HH:MM:ss Z",
+                        ignore: "pid,hostname",
+                        colorize: true,
+                    },
+                },
+            },
+        });
+
+	// Register core plugins
+	await fastify.register(sensible);
+
+	// Set up Zod validation
+	fastify.setValidatorCompiler(validatorCompiler);
+	fastify.setSerializerCompiler(serializerCompiler);
+
+	// Register custom plugins
+	await fastify.register(loggerPlugin);
+	await fastify.register(monitorPlugin);
+	await fastify.register(configPlugin);
+
+	// Global Error Handler Stub for Alerting
+	fastify.setErrorHandler((error, request, reply) => {
+		fastify.log.error(error, `[GLOBAL]: Request failed: ${error.message}`);
+		// Here we would send alerts to Sentry/PagerDuty etc.
+		reply.send(error);
+	});
+
+        return fastify
+}

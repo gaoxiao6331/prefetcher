@@ -11,7 +11,8 @@
         "run:prod": "pnpm build && cross-env NODE_ENV=production pnpm start",
         "clean": "rm -rf dist",
         "format": "biome format --write .",
-        "fix": "biome check --fix ."
+        "fix": "biome check --fix .",
+        "test": "jest"
     },
     "keywords": [],
     "author": "",
@@ -28,8 +29,10 @@
     },
     "devDependencies": {
         "@biomejs/biome": "^2.3.8",
+        "@types/jest": "^30.0.0",
         "@types/node": "^20.11.19",
         "cross-env": "^10.1.0",
+        "jest": "^30.2.0",
         "nodemon": "^3.0.3",
         "pino-pretty": "^10.3.1",
         "ts-node": "^10.9.2",
