@@ -1,12 +1,12 @@
-import Fastify from "fastify";
 import sensible from "@fastify/sensible";
+import Fastify from "fastify";
 import {
 	serializerCompiler,
 	validatorCompiler,
 } from "fastify-type-provider-zod";
+import configPlugin from "../plugins/config";
 import loggerPlugin from "../plugins/logger";
 import monitorPlugin from "../plugins/monitor";
-import configPlugin from "../plugins/config";
 
 export default async function createFastifyInstance() {
 	const fastify = Fastify({

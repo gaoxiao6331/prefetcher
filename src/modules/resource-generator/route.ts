@@ -15,7 +15,11 @@ const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
 		async (request, reply) => {
 			const { targetUrl, projectName, targetFileName } = request.body;
 			const list = await resourceGeneratorService.captureResources(targetUrl);
-			await cdnUpdaterService.update(projectName, targetFileName, JSON.stringify(list));
+			await cdnUpdaterService.update(
+				projectName,
+				targetFileName,
+				JSON.stringify(list),
+			);
 			return {
 				message: "Success",
 			};

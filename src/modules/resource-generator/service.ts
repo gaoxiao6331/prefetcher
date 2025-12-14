@@ -1,6 +1,6 @@
+import type { FastifyInstance } from "fastify";
 import puppeteer, { type Browser } from "puppeteer";
 import type { CapturedResource } from "./type";
-import type { FastifyInstance } from "fastify";
 
 class ResourceGeneratorService {
 	private readonly requestHeader = "x-prefetcher-req-id";

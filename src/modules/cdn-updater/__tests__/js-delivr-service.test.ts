@@ -1,7 +1,7 @@
-import JsDelivrService from "../js-delivr-service";
-import { FastifyInstance } from "fastify";
-import createFastifyInstance from "@/utils/create-fastify-instance";
 import { describe } from "node:test";
+import type { FastifyInstance } from "fastify";
+import createFastifyInstance from "@/utils/create-fastify-instance";
+import JsDelivrService from "../js-delivr-service";
 
 describe("JsDelivrService", () => {
 

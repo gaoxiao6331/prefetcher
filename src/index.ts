@@ -1,5 +1,5 @@
-import resourceGeneratorModule from "@/modules/resource-generator";
 import jsDelivrServiceModule from "@/modules/cdn-updater";
+import resourceGeneratorModule from "@/modules/resource-generator";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 
 const start = async () => {

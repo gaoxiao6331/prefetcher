@@ -1,7 +1,7 @@
+import { exec } from "child_process";
 import type { FastifyInstance } from "fastify";
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
 import { promisify } from "util";
 
 const execPromise = promisify(exec);
@@ -33,7 +33,7 @@ class JsDelivrService {
 
 	parseRepoInfo(remoteAddr: string) {
 		// 解析github远程仓库的用户名和项目名 eg：https://github.com/gaoxiao6331/cdn-test
-		const match = remoteAddr.match(/https:\/\/github.com\/([^\/]+)\/([^\/]+)/);
+		const match = remoteAddr.match(/https:\/\/github.com\/([^/]+)\/([^/]+)/);
 		if (!match) {
 			throw new Error("Invalid github remote address");
 		}
