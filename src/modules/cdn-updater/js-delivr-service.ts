@@ -116,7 +116,6 @@ class JsDelivrService {
 		await this.verifyContentUpdate(
 			namespace,
 			projectName,
-			versionTag,
 			relativeFilePath,
 			content,
 		);
@@ -202,12 +201,11 @@ class JsDelivrService {
 	private async verifyContentUpdate(
 		namespace: string,
 		projectName: string,
-		version: string,
 		relativeFilePath: string,
 		content: string,
 	): Promise<void> {
 		// Check if content is available via jsDelivr
-		const url = `https://cdn.jsdelivr.net/gh/${namespace}/${projectName}@${version}/${relativeFilePath}`;
+		const url = `https://cdn.jsdelivr.net/gh/${namespace}/${projectName}/${relativeFilePath}`;
 		this.fastify.log.info(`Verifying content update: ${url}`);
 		const { stdout } = await execPromise(`curl -s "${url}"`);
 
