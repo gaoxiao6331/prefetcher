@@ -6,6 +6,7 @@ import { promisify } from "util";
 
 const execPromise = promisify(exec);
 
+// 使用这个服务前需要配置github ssh
 class JsDelivrService {
 	private readonly localPath: string;
 	private readonly remoteAddr: string;

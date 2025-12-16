@@ -1,45 +1,33 @@
-import cdnUpdaterModule from "@/modules/cdn-updater";
-import resourceGeneratorModule from "@/modules/resource-generator";
-import createFastifyInstance from "@/utils/create-fastify-instance";
+#!/usr/bin/env node
 
-const start = async () => {
-	const fastify = await createFastifyInstance();
+import { Command } from "commander";
+import { version } from "../package.json";
+import { start } from "./start";
+import tools from "./tools";
 
-	// Register business modules
-	await fastify.register(resourceGeneratorModule);
-	await fastify.register(cdnUpdaterModule);
+const program = new Command();
 
-	try {
-		const port = fastify.config.port ?? 3000;
-		const host = "0.0.0.0";
-		await fastify.listen({ port, host });
-		console.log(`Server listening on http://localhost:${port}`);
-	} catch (err) {
-		fastify.log.error(err);
-		process.exit(1);
-	}
+program
+  .name("prefetcher")
+  .description("a tool to generate prefetch links")
+  .version(version);
 
-	// 捕获终止信号（如 Ctrl+C 或 Kubernetes 发出的 SIGTERM）
-	process.on("SIGTERM", async () => {
-		fastify.log.info("shutting down gracefully...");
-		try {
-			await fastify.close(); // Fastify 会等待现有请求处理完毕后再关闭
-			fastify.log.info("Server shut down gracefully");
-			process.exit(0);
-		} catch (error: any) {
-			fastify.log.error("Error during shutdown:", error);
-			process.exit(1);
-		}
-	});
+program
+  .command("start")
+  .description("start the prefetcher server")
+  .action(() => {
+    start();
+  });
 
-	process.on("unhandledRejection", (reason, promise) => {
-		fastify.log.error(reason, "Unhandled Rejection occurred");
-	});
+program
+  .command("tool")
+  .description("helper tool for using a prefetcher")
+  .argument("<type>", 'which tool to use')
+  .action((type, options) => {
+	const tool = tools[type as keyof typeof tools];
+	if(!tool) throw new Error(`Tool ${type} not found`);
+	// @ts-expect-error
+	tool(options);
+  });
 
-	// 捕获未处理的异常
-	process.on("uncaughtException", (error) => {
-		fastify.log.error(error, "Uncaught Exception occurred");
-	});
-};
-
-start();
+program.parse()

@@ -7,4 +7,7 @@ export interface Config {
 			remoteAddr: string;
 		};
 	};
+	crypto?: {
+		publicKey: string;
+	};
 }

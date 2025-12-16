@@ -1,0 +1,127 @@
+import CryptoRsaUtil from "@/utils/crypto-rsa";
+import axios from "axios";
+import { FastifyInstance } from "fastify";
+
+// 使用这个服务前需要配置飞书webhook token
+class LarkNotifierService {
+  private constructor(
+    private fastify: FastifyInstance,
+    private tokens: string[]
+  ) {}
+
+  static async create(fastify: FastifyInstance, tokens: string[]) {
+    if (!(tokens?.length > 0)) throw new Error("No tokens provided");
+    if (!fastify.config.crypto?.publicKey) {
+      fastify.log.warn("Crypto config is missing");
+    }
+    return new LarkNotifierService(fastify, tokens);
+  }
+
+  async send(message: string, type: "info" | "error") {
+    const configMap = {
+      info: {
+        color: "green",
+        content: "通知",
+      },
+      error: {
+        color: "red",
+        content: "🚨警报🚨",
+      },
+    };
+
+    const config = configMap[type];
+
+    const content = {
+      msg_type: "interactive",
+      card: {
+        schema: "2.0",
+        config: {
+          update_multi: true,
+          style: {
+            text_size: {
+              normal_v2: {
+                default: "normal",
+                pc: "normal",
+                mobile: "heading",
+              },
+            },
+          },
+        },
+        body: {
+          direction: "vertical",
+          padding: "12px 12px 12px 12px",
+          elements: [
+            {
+              tag: "markdown",
+              content: message,
+              text_align: "left",
+              text_size: "normal_v2",
+              margin: "0px 0px 0px 0px",
+            },
+            {
+              tag: "div",
+              text: {
+                content:
+                  "<at id=all></at>",
+                tag: "lark_md",
+              },
+            },
+          ],
+        },
+        header: {
+          title: {
+            tag: "plain_text",
+            content: config.content,
+          },
+          subtitle: {
+            tag: "plain_text",
+            content: "",
+          },
+          template: config.color,
+          padding: "12px 12px 12px 12px",
+        },
+      },
+    };
+
+    const url = `https://open.feishu.cn/open-apis/bot/v2/hook/`;
+
+    const reqs = this.tokens.map(async (token) => {
+      const res = await axios.post(url + token, content);
+      // 请求状态是200且响应数据中code字段是0
+      if (res.status === 200 && res.data?.code === 0) {
+        return Promise.resolve("");
+      } else {
+        return Promise.reject(res.data?.msg || "Unknown error");
+      }
+    });
+
+    // 等待所有请求完成，无论成功还是失败
+    const results = await Promise.allSettled(reqs);
+
+    const success = results.every((result) => result.status === "fulfilled");
+    if (!success) {
+      // 出现错误抛出异常，因为会包含token信息，log要加密
+      const key = this.fastify.config.crypto?.publicKey;
+      const tokenStr = JSON.stringify(this.tokens);
+      const tokens = key ? CryptoRsaUtil.encrypt(tokenStr, key) : tokenStr;
+      this.fastify.log.error(
+        {
+          results,
+          tokens,
+        },
+        "Failed to send message(s) to Lark"
+      );
+      throw new Error("Failed to send message(s) to Lark");
+    }
+  }
+
+  async info(message: string) {
+    await this.send(message, "info");
+  }
+
+  async error(message: string) {
+    await this.send(message, "error");
+  }
+}
+
+export default LarkNotifierService;
