@@ -2,6 +2,14 @@ import CryptoRsaUtil from "@/utils/crypto-rsa";
 import axios from "axios";
 import { FastifyInstance } from "fastify";
 
+interface MessageConfig {
+  color: string;
+  content: string;
+  extraElements: any[];
+}
+
+type MessageType = "info" | "error";
+
 // 使用这个服务前需要配置飞书webhook token
 class LarkNotifierService {
   private constructor(
@@ -17,15 +25,27 @@ class LarkNotifierService {
     return new LarkNotifierService(fastify, tokens);
   }
 
-  async send(message: string, type: "info" | "error") {
-    const configMap = {
+  async send(message: string, type: MessageType) {
+    const configMap: Record<MessageType, MessageConfig> = {
       info: {
         color: "green",
         content: "通知",
+        extraElements: [
+        ],
       },
       error: {
         color: "red",
         content: "🚨警报🚨",
+        extraElements: [
+          {
+              tag: "div",
+              text: {
+                content:
+                  "<at id=all></at>",
+                tag: "lark_md",
+              },
+            },
+        ]
       },
     };
 
@@ -58,14 +78,7 @@ class LarkNotifierService {
               text_size: "normal_v2",
               margin: "0px 0px 0px 0px",
             },
-            {
-              tag: "div",
-              text: {
-                content:
-                  "<at id=all></at>",
-                tag: "lark_md",
-              },
-            },
+            ...config.extraElements,
           ],
         },
         header: {

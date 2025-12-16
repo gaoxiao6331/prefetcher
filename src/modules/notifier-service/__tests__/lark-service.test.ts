@@ -7,7 +7,7 @@ describe("LarkService", () => {
 	let fastify: FastifyInstance;
 	let larkService: LarkService;
 	
-	beforeEach(async () => {
+	beforeAll(async () => {
 		fastify = await createFastifyInstance();
 		larkService = await LarkService.create(fastify, process.env.LARK_BOT_TOKENS?.split(",") ?? []);
 	});
