@@ -2,8 +2,8 @@ import chalk from 'chalk';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { PASSPHRASE } from '@/env';
 
-const PASSPHRASE = process.env.PASSPHRASE || '';
 
 const CONFIG = {
   padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,

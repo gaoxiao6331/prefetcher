@@ -1,8 +1,9 @@
 import dev from "./file/dev";
 import prod from "./file/prod";
 import test from "./file/test";
-
-const env = process.env.NODE_ENV;
+import {
+	env
+} from '@/env'
 
 const configMap = {
 	development: dev,

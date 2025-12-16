@@ -2,6 +2,7 @@ import { describe } from "node:test";
 import type { FastifyInstance } from "fastify";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 import LarkService from "../lark-service";
+import { LARK_BOT_TOKENS } from '@/env'
 
 describe("LarkService", () => {
 	let fastify: FastifyInstance;
@@ -9,7 +10,7 @@ describe("LarkService", () => {
 	
 	beforeAll(async () => {
 		fastify = await createFastifyInstance();
-		larkService = await LarkService.create(fastify, process.env.LARK_BOT_TOKENS?.split(",") ?? []);
+		larkService = await LarkService.create(fastify, LARK_BOT_TOKENS?.split(",") ?? []);
 	});
 	it("should send info message to lark", async () => {
 		await larkService.info("test");
