@@ -20,14 +20,19 @@ program
   });
 
 program
-  .command("tool")
-  .description("helper tool for using a prefetcher")
-  .argument("<type>", 'which tool to use')
-  .action((type, options) => {
-	const tool = tools[type as keyof typeof tools];
-	if(!tool) throw new Error(`Tool ${type} not found`);
-	// @ts-expect-error
-	tool(options);
+  .command("gen-keys")
+  .description("generate rsa keys for encryption")
+  .action(() => {
+    tools.genKeys();
   });
 
-program.parse()
+program
+  .command("decrypt")
+  .description("decrypt data using rsa private key")
+  .requiredOption("-d, --data <data>", "encrypted data to decrypt")
+  .requiredOption("-k, --key <key>", "rsa private key for decryption")
+  .action((opts) => {
+    tools.decrypt(opts);
+  });
+
+program.parse();

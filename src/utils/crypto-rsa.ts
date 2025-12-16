@@ -1,7 +1,14 @@
+import chalk from 'chalk';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
+const PASSPHRASE = process.env.PASSPHRASE || '';
+
+const CONFIG = {
+  padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+  oaepHash: 'sha256'
+}
 
 /**
  * 基于 Node.js 内置 crypto 模块的 RSA 非对称加密服务类
@@ -25,6 +32,9 @@ class CryptoRsaUtil {
    * 生成 RSA 密钥对
    */
   static generateKeyPair(modulusLength: number): { publicKey: string, privateKey: string } {
+    if (!PASSPHRASE) {
+      console.log(chalk.yellow('PASSPHRASE environment variable is not set. Private key will not be encrypted.'));
+    }
     return crypto.generateKeyPairSync('rsa', {
       modulusLength: modulusLength,
       publicKeyEncoding: {
@@ -35,7 +45,7 @@ class CryptoRsaUtil {
         type: 'pkcs8',
         format: 'pem',
         cipher: 'aes-256-cbc',
-        passphrase: '', // 可设置密码保护私钥
+        passphrase: PASSPHRASE, // 设置密码保护私钥
       },
     });
   }
@@ -48,7 +58,10 @@ class CryptoRsaUtil {
   static encrypt(data: string, publicKey: string): string {
     const key = publicKey;
     const buffer = Buffer.from(data, 'utf8');
-    const encrypted = crypto.publicEncrypt(key, buffer);
+    const encrypted = crypto.publicEncrypt({
+      key: publicKey,
+      ...CONFIG,
+    }, buffer);
     return encrypted.toString('base64');
   }
 
@@ -60,35 +73,12 @@ class CryptoRsaUtil {
   static decrypt(encryptedData: string, privateKey: string): string {
     const key = privateKey;
     const buffer = Buffer.from(encryptedData, 'base64');
-    const decrypted = crypto.privateDecrypt(key, buffer);
+    const decrypted = crypto.privateDecrypt({
+      key: privateKey,
+      passphrase: PASSPHRASE,
+      ...CONFIG,
+    }, buffer);
     return decrypted.toString('utf8');
-  }
-
-  /**
-   * 使用私钥对数据进行数字签名
-   * @param data 要签名的数据
-   * @param privateKey 私钥
-   */
-  static sign(data: string, privateKey: string): string {
-    const key = privateKey;
-    const sign = crypto.createSign('SHA256');
-    sign.update(data);
-    sign.end();
-    return sign.sign(key).toString('base64');
-  }
-
-  /**
-   * 使用公钥验证数字签名
-   * @param data 原始数据
-   * @param signature Base64 格式的签名
-   * @param publicKey 公钥
-   */
-  static verify(data: string, signature: string, publicKey: string): boolean {
-    const key = publicKey;
-    const verify = crypto.createVerify('SHA256');
-    verify.update(data);
-    verify.end();
-    return verify.verify(key, Buffer.from(signature, 'base64'));
   }
 
    /**
@@ -124,14 +114,6 @@ class CryptoRsaUtil {
 
   decrypt(encryptedData: string): string {
     return CryptoRsaUtil.decrypt(encryptedData, this.privateKey);
-  }
-
-  sign(data: string): string {
-    return CryptoRsaUtil.sign(data, this.privateKey);
-  }
-
-  verify(data: string, signature: string): boolean {
-    return CryptoRsaUtil.verify(data, signature, this.publicKey);
   }
 }
 
