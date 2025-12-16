@@ -13,8 +13,8 @@ export const createResourceSchema = {
       .optional(),
   }),
   response: {
-    200: z.object({
-      message: z.string(),
-    }),
+    '200': z.object({
+      url: z.string(),
+    })
   },
 };

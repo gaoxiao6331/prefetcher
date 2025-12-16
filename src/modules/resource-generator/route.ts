@@ -18,13 +18,13 @@ const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
 			const list = await resourceGeneratorService.captureResources(targetUrl);
 			const c = JSON.stringify(list)
 			const content = template?.replace("__content_placeholder__", c) ?? c;
-			await cdnUpdaterService.update(
+			const { url } = await cdnUpdaterService.update(
 				projectName,
 				targetFileName,
 				content,
 			);
 			return {
-				message: "Success",
+				url,
 			};
 		},
 	);

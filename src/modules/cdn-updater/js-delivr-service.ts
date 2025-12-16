@@ -41,26 +41,42 @@ class JsDelivrService {
 		return { namespace, projectName };
 	}
 
-	// 把content更新到localPath下，目录结构为localPath/dirName/fileName，并推送到远程仓库
-	async update(dirName: string, fileName: string, content: string) {
+	// 把content更新到localPath下的branchName分支，目录结构为localPath/fileName，并推送到远程仓库
+	async update(branchName: string, fileName: string, content: string) {
 		const localPath = this.localPath;
 		const remoteAddr = this.remoteAddr;
 
-		// 1. 检查localPath是否存在，不存在从远程拉取
+		// 1. 检查localPath是否存在
 		const resolvedLocalPath = path.resolve(localPath);
 		if (!fs.existsSync(resolvedLocalPath)) {
-			// git 拉取remoteAddr到resolvedLocalPath
+			// 不存在从远程拉取
+			this.fastify.log.info(`Local path "${resolvedLocalPath}" does not exist, cloning remote repository`);
 			await execPromise(`git clone "${remoteAddr}" "${resolvedLocalPath}"`);
 		}
 
-		// 2. 检查localPath下是否存在projectName和fileName，不存在就创建
-		const resolvedDirPath = path.join(resolvedLocalPath, dirName);
-		if (!fs.existsSync(resolvedDirPath)) {
-			fs.mkdirSync(resolvedDirPath, { recursive: true });
+		// 检查本地是否存在branchName分支，不存在创建去远程拉取，远程不存在则创建
+		try {
+			// Check if branch exists locally
+			await execPromise(`cd "${resolvedLocalPath}" && git rev-parse --verify "${branchName}"`);
+			// Branch exists, switch to it
+			this.fastify.log.info(`Branch "${branchName}" exists locally, switching to it`);
+			await execPromise(`cd "${resolvedLocalPath}" && git checkout "${branchName}"`);
+		} catch (error) {
+			// Branch doesn't exist locally, check if it exists remotely
+			try {
+				await execPromise(`cd "${resolvedLocalPath}" && git rev-parse --verify "origin/${branchName}"`);
+				// Branch exists remotely, check it out
+				this.fastify.log.info(`Branch "${branchName}" exists remotely, checking it out`);
+				await execPromise(`cd "${resolvedLocalPath}" && git checkout -b "${branchName}" "origin/${branchName}"`);
+			} catch (remoteError) {
+				// Branch doesn't exist remotely either, create it
+				// TODO 清空main分支，基于空白分支创建新分支
+				this.fastify.log.info(`Branch "${branchName}" does not exist, creating it`);
+				await execPromise(`cd "${resolvedLocalPath}" && git checkout -b "${branchName}"`);
+			}
 		}
 
-		const resolvedFilePath = path.join(resolvedDirPath, fileName);
-		const relativeFilePath = `${dirName}/${fileName}`;
+		const resolvedFilePath = path.join(resolvedLocalPath, fileName);
 
 		// 检查文件是否存在
 		if (!fs.existsSync(resolvedFilePath)) {
@@ -75,7 +91,7 @@ class JsDelivrService {
 			if (tags.length > 0) {
 				const latestTag = tags[0];
 				const match = latestTag.match(
-					new RegExp(`${dirName}-${fileName}-(\\d+)`),
+					new RegExp(`${fileName}-(\\d+)`),
 				);
 				if (match) {
 					version = parseInt(match[1], 10) + 1;
@@ -90,7 +106,7 @@ class JsDelivrService {
 		}
 
 		// 4. 初始版本号为{projectName}-{filename}-1，如果上一步没有获取到tag就使用初始值，否则最后的数字+1
-		const versionTag = `${dirName}-${fileName}-${version}`;
+		const versionTag = `${fileName}-${version}`;
 
 		// Write the content to the file
 		fs.writeFileSync(resolvedFilePath, content);
@@ -104,21 +120,27 @@ class JsDelivrService {
 
 		const { namespace, projectName } = this.parseRepoInfo(remoteAddr);
 
+		const relativeFilePath = path.relative(resolvedLocalPath, resolvedFilePath);
 		// 7. 手动刷新js delivr的cdn
 		await this.purgeJsDelivrCache(
 			namespace,
 			projectName,
-			versionTag,
 			relativeFilePath,
+			branchName,
 		);
 
-		// 8. 检查内容是否更新
-		await this.verifyContentUpdate(
-			namespace,
-			projectName,
-			relativeFilePath,
-			content,
-		);
+		// 8. 检查内容是否更新 TODO 因为cdn刷新延时，改成延时校验
+		// await this.verifyContentUpdate(
+		// 	namespace,
+		// 	projectName,
+		// 	relativeFilePath,
+		// 	branchName,
+		// 	content,
+		// );
+
+		return {
+			url: this.getCdnAddr(namespace, projectName, relativeFilePath, branchName),
+		}
 	}
 
 	private async getLatestTags(
@@ -183,11 +205,11 @@ class JsDelivrService {
 	private async purgeJsDelivrCache(
 		namespace: string,
 		projectName: string,
-		version: string,
 		relativeFilePath: string,
+		branchName: string,
 	): Promise<void> {
 		// Using jsDelivr purge API
-		const url = `https://purge.jsdelivr.net/gh/${namespace}/${projectName}@${version}/${relativeFilePath}`;
+		const url = `https://purge.jsdelivr.net/gh/${namespace}/${projectName}@${branchName}/${relativeFilePath}`;
 		this.fastify.log.info(`Purging jsDelivr cache: ${url}`);
 		const res = await execPromise(`curl -s "${url}"`);
 		// 检查返回的status 是否是finished
@@ -198,14 +220,26 @@ class JsDelivrService {
 		}
 	}
 
+	private getCdnAddr(
+		namespace: string,
+		projectName: string,
+		relativeFilePath: string,
+		branchName: string,
+	) {
+		const url = `https://cdn.jsdelivr.net/gh/${namespace}/${projectName}@${branchName}/${relativeFilePath}`;
+		return url
+	}
+
+
 	private async verifyContentUpdate(
 		namespace: string,
 		projectName: string,
 		relativeFilePath: string,
+		branchName: string,
 		content: string,
 	): Promise<void> {
 		// Check if content is available via jsDelivr
-		const url = `https://cdn.jsdelivr.net/gh/${namespace}/${projectName}/${relativeFilePath}`;
+		const url = this.getCdnAddr(namespace, projectName, relativeFilePath, branchName)
 		this.fastify.log.info(`Verifying content update: ${url}`);
 		const { stdout } = await execPromise(`curl -s "${url}"`);
 
