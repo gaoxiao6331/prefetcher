@@ -47,10 +47,20 @@ export default async function createFastifyInstance() {
   // Global Error Handler Stub for Alerting
   fastify.setErrorHandler((error, request, reply) => {
     fastify.log.error(error, `[GLOBAL]: Request failed: ${error.message}`);
+    let code = error?.statusCode || 500;
+    // 手动设置了相应的status code
+    if(reply.statusCode !== 200) {
+      code = reply.statusCode
+    }
     // Here we would send alerts to Sentry/PagerDuty etc.
     reply.send(error);
-    if(fastify.config.env !== 'dev') {
-      fastify.alert(error?.message ?? error?.toString());
+    // 非开发环境且是500错误
+    if(fastify.config.env !== 'dev' && code >= 500) {
+      fastify.alert(JSON.stringify({
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      }));
     }
   });
 

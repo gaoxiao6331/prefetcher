@@ -12,9 +12,7 @@ type MessageType = "info" | "error";
 
 // 使用这个服务前需要配置飞书webhook token
 class LarkNotifierService {
-  private constructor(
-    private fastify: FastifyInstance,
-  ) {}
+  private constructor(private fastify: FastifyInstance) {}
 
   static async create(fastify: FastifyInstance) {
     if (!fastify.config.crypto?.publicKey) {
@@ -32,22 +30,20 @@ class LarkNotifierService {
       info: {
         color: "green",
         content: "通知",
-        extraElements: [
-        ],
+        extraElements: [],
       },
       error: {
         color: "red",
         content: "🚨警报🚨",
         extraElements: [
           {
-              tag: "div",
-              text: {
-                content:
-                  "<at id=all></at>",
-                tag: "lark_md",
-              },
+            tag: "div",
+            text: {
+              content: "<at id=all></at>",
+              tag: "lark_md",
             },
-        ]
+          },
+        ],
       },
     };
 
@@ -119,14 +115,12 @@ class LarkNotifierService {
       const key = this.fastify.config.crypto?.publicKey;
       const tokenStr = JSON.stringify(tokens);
       const logTokens = key ? CryptoRsaUtil.encrypt(tokenStr, key) : tokenStr;
-      this.fastify.log.error(
-        {
-          results,
-          tokens: logTokens,
-        },
-        "Failed to send message(s) to Lark"
+      throw new Error(
+        `Failed to send message(s) to Lark.
+         Results: ${JSON.stringify(results)}
+        Tokens: ${logTokens}
+        `
       );
-      throw new Error("Failed to send message(s) to Lark");
     }
   }
 

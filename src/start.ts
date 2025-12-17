@@ -1,13 +1,16 @@
 import cdnUpdaterModule from "@/modules/cdn-updater";
 import resourceGeneratorModule from "@/modules/resource-generator";
+import notifierModule from "@/modules/notifier";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 
 export const start = async () => {
 	const fastify = await createFastifyInstance();
 
 	// Register business modules
+	await fastify.register(notifierModule);
 	await fastify.register(resourceGeneratorModule);
 	await fastify.register(cdnUpdaterModule);
+
 	
 
 	try {
