@@ -25,7 +25,7 @@ class LarkNotifierService {
     return new LarkNotifierService(fastify, tokens);
   }
 
-  async send(message: string, type: MessageType) {
+  private async send(message: string, type: MessageType) {
     const configMap: Record<MessageType, MessageConfig> = {
       info: {
         color: "green",
