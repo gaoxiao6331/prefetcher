@@ -29,6 +29,7 @@
         "fastify-type-provider-zod": "1.1.9",
         "pino": "^8.19.0",
         "puppeteer": "^24.27.0",
+        "rotating-file-stream": "^3.2.7",
         "zod": "3.23.8"
     },
     "devDependencies": {

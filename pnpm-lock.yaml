@@ -41,6 +41,9 @@ importers:
       puppeteer:
         specifier: ^24.27.0
         version: 24.32.1(typescript@5.9.3)
+      rotating-file-stream:
+        specifier: ^3.2.7
+        version: 3.2.7
       zod:
         specifier: 3.23.8
         version: 3.23.8
@@ -1966,6 +1969,10 @@ packages:
 
   rfdc@1.4.1:
     resolution: {integrity: sha512-q1b3N5QkRUWUl7iyylaaj3kOpIT0N2i9MqIEQXP73GVsN9cw3fdx8X63cEmWhJGi2PPCF23Ijp7ktmd39rawIA==}
+
+  rotating-file-stream@3.2.7:
+    resolution: {integrity: sha512-SVquhBEVvRFY+nWLUc791Y0MIlyZrEClRZwZFLLRgJKldHyV1z4e2e/dp9LPqCS3AM//uq/c3PnOFgjqnm5P+A==}
+    engines: {node: '>=14.0'}
 
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
@@ -4529,6 +4536,8 @@ snapshots:
   reusify@1.1.0: {}
 
   rfdc@1.4.1: {}
+
+  rotating-file-stream@3.2.7: {}
 
   run-parallel@1.2.0:
     dependencies:
