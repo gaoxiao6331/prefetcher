@@ -24,6 +24,10 @@ class LarkNotifierService {
   }
 
   private async send(message: string, type: MessageType, tokens: string[]) {
+    if (!tokens || tokens.length === 0) {
+      this.fastify.log.error("No tokens provided");
+      throw new Error("No tokens provided");
+    }
     const configMap: Record<MessageType, MessageConfig> = {
       info: {
         color: "green",

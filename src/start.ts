@@ -8,6 +8,7 @@ export const start = async () => {
 	// Register business modules
 	await fastify.register(resourceGeneratorModule);
 	await fastify.register(cdnUpdaterModule);
+	
 
 	try {
 		const port = fastify.config.port ?? 3000;
@@ -19,7 +20,7 @@ export const start = async () => {
 		process.exit(1);
 	}
 
-	// 捕获终止信号（如 Ctrl+C 或 Kubernetes 发出的 SIGTERM）
+	// 捕获终止信号（如 Ctrl+C）
 	process.on("SIGTERM", async () => {
 		fastify.log.info("shutting down gracefully...");
 		try {
@@ -34,10 +35,16 @@ export const start = async () => {
 
 	process.on("unhandledRejection", (reason, promise) => {
 		fastify.log.error(reason, "Unhandled Rejection occurred");
+		if(fastify.config.env !== 'dev') {
+			fastify.alert(`Unhandled Rejection occurred: ${reason}`);
+		}
 	});
 
 	// 捕获未处理的异常
 	process.on("uncaughtException", (error) => {
 		fastify.log.error(error, "Uncaught Exception occurred");
+		if(fastify.config.env !== 'dev') {
+			fastify.alert(`Uncaught Exception occurred: ${error}`);
+		}
 	});
 };

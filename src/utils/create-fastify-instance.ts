@@ -7,6 +7,7 @@ import {
 import configPlugin from "../plugins/config";
 import loggerPlugin from "../plugins/logger";
 import monitorPlugin from "../plugins/monitor";
+import alertPlugin from "../plugins/alert";
 
 export default async function createFastifyInstance() {
   const fastify = Fastify({
@@ -40,6 +41,7 @@ export default async function createFastifyInstance() {
   // Register custom plugins
   await fastify.register(loggerPlugin);
   await fastify.register(monitorPlugin);
+  await fastify.register(alertPlugin);
   await fastify.register(configPlugin);
 
   // Global Error Handler Stub for Alerting
