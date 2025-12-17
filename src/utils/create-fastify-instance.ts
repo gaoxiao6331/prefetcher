@@ -49,6 +49,9 @@ export default async function createFastifyInstance() {
     fastify.log.error(error, `[GLOBAL]: Request failed: ${error.message}`);
     // Here we would send alerts to Sentry/PagerDuty etc.
     reply.send(error);
+    if(fastify.config.env !== 'dev') {
+      fastify.alert(error?.message ?? error?.toString());
+    }
   });
 
   return fastify;
