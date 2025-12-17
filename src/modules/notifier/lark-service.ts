@@ -14,18 +14,16 @@ type MessageType = "info" | "error";
 class LarkNotifierService {
   private constructor(
     private fastify: FastifyInstance,
-    private tokens: string[]
   ) {}
 
-  static async create(fastify: FastifyInstance, tokens: string[]) {
-    if (!(tokens?.length > 0)) throw new Error("No tokens provided");
+  static async create(fastify: FastifyInstance) {
     if (!fastify.config.crypto?.publicKey) {
       fastify.log.warn("Crypto config is missing");
     }
-    return new LarkNotifierService(fastify, tokens);
+    return new LarkNotifierService(fastify);
   }
 
-  private async send(message: string, type: MessageType) {
+  private async send(message: string, type: MessageType, tokens: string[]) {
     const configMap: Record<MessageType, MessageConfig> = {
       info: {
         color: "green",
@@ -98,7 +96,7 @@ class LarkNotifierService {
 
     const url = `https://open.feishu.cn/open-apis/bot/v2/hook/`;
 
-    const reqs = this.tokens.map(async (token) => {
+    const reqs = tokens.map(async (token) => {
       const res = await axios.post(url + token, content);
       // 请求状态是200且响应数据中code字段是0
       if (res.status === 200 && res.data?.code === 0) {
@@ -115,12 +113,12 @@ class LarkNotifierService {
     if (!success) {
       // 出现错误抛出异常，因为会包含token信息，log要加密
       const key = this.fastify.config.crypto?.publicKey;
-      const tokenStr = JSON.stringify(this.tokens);
-      const tokens = key ? CryptoRsaUtil.encrypt(tokenStr, key) : tokenStr;
+      const tokenStr = JSON.stringify(tokens);
+      const logTokens = key ? CryptoRsaUtil.encrypt(tokenStr, key) : tokenStr;
       this.fastify.log.error(
         {
           results,
-          tokens,
+          tokens: logTokens,
         },
         "Failed to send message(s) to Lark"
       );
@@ -128,12 +126,12 @@ class LarkNotifierService {
     }
   }
 
-  async info(message: string) {
-    await this.send(message, "info");
+  async info(message: string, tokens: string[]) {
+    await this.send(message, "info", tokens);
   }
 
-  async error(message: string) {
-    await this.send(message, "error");
+  async error(message: string, tokens: string[]) {
+    await this.send(message, "error", tokens);
   }
 }
 

@@ -146,26 +146,6 @@ class JsDelivrService {
       branchName
     );
 
-    // 8. 检查内容是否更新 因为cdn刷新延时，改成延时校验
-    setTimeout(async () => {
-      const url = this.getCdnAddr(
-        namespace,
-        projectName,
-        relativeFilePath,
-        branchName
-      );
-      const res = await this.verifyContentUpdate(url, content);
-      if (res) {
-        this.fastify.notifierService.info(`CDN更新成功！
-			${url}
-		`);
-      } else {
-        this.fastify.notifierService.error(`CDN更新失败！
-			${url}
-		`);
-      }
-    }, 5000);
-
     return {
       url: this.getCdnAddr(
         namespace,
@@ -263,7 +243,7 @@ class JsDelivrService {
     return url;
   }
 
-  private async verifyContentUpdate(url: string, content: string) {
+  async verifyContentUpdate(url: string, content: string) {
     // Check if content is available via jsDelivr
     this.fastify.log.info(`Verifying content update: ${url}`);
     const { stdout } = await execPromise(`curl -s "${url}"`);

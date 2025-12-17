@@ -10,12 +10,12 @@ describe("LarkService", () => {
 	
 	beforeAll(async () => {
 		fastify = await createFastifyInstance();
-		larkService = await LarkService.create(fastify, LARK_BOT_TOKENS?.split(",") ?? []);
+		larkService = await LarkService.create(fastify);
 	});
 	it("should send info message to lark", async () => {
-		await larkService.info("test");
+		await larkService.info("test", LARK_BOT_TOKENS?.split(",") ?? []);
 	});
 	it("should send error message to lark", async () => {
-		await larkService.error("这是一段错误信息");
+		await larkService.error("这是一段错误信息", LARK_BOT_TOKENS?.split(",") ?? []);
 	});
 });
