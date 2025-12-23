@@ -1,62 +1,46 @@
-FROM ubuntu:20.04
+# --- 第一阶段：构建阶段 ---
+    FROM node:18-bullseye-slim AS builder
 
-# Avoid prompts from apt
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    gnupg \
-    ca-certificates \
-    fonts-liberation \
-    libappindicator3-1 \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libgdk-pixbuf2.0-0 \
-    libnspr4 \
-    libnss3 \
-    libx11-xcb1 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    xdg-utils \
-    xvfb \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Chrome
-RUN curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js v18
-RUN curl -sL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install pnpm
-RUN npm install -g pnpm
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
-
-# Install dependencies
-RUN pnpm install --frozen-lockfile
-
-# Copy source code
-COPY . .
-
-# Expose port
-EXPOSE 3000
-
-# Build the application
-RUN pnpm build
-
-# Start the application
-CMD ["pnpm", "start"]
+    RUN corepack enable && corepack prepare pnpm@latest --activate
+    WORKDIR /app
+    
+    # 缓存依赖层
+    COPY package.json pnpm-lock.yaml ./
+    RUN pnpm install --frozen-lockfile
+    
+    # 复制源码并构建
+    COPY . .
+    RUN pnpm build
+    
+    # --- 第二阶段：运行阶段 ---
+    # 直接使用 Puppeteer 官方镜像，它基于 Debian 并预装了最新的 Chrome 和所有必需的依赖
+    # 这个镜像本身就包含 Node.js 18/20 以及 dumb-init
+    FROM ghcr.io/puppeteer/puppeteer:latest
+    
+    # 1. 核心环境变量
+    ENV NODE_ENV=production \
+        # 官方镜像已经安装了浏览器，通常在 /usr/bin/google-chrome
+        PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+    
+    WORKDIR /app
+    
+    # 2. 复制产物
+    # 官方镜像默认创建了 pptruser 用户（UID 1000），直接使用即可
+    COPY --from=builder --chown=pptruser:pptruser /app/node_modules ./node_modules
+    COPY --from=builder --chown=pptruser:pptruser /app/dist ./dist
+    COPY --from=builder --chown=pptruser:pptruser /app/package.json ./package.json
+    
+    # 3. 字体处理（可选）
+    # 官方镜像自带了基础中文字体。如果你有特殊的字体需求，可以额外安装，
+    # 但对于一般的中文网页渲染，官方镜像已经足够。
+    
+    # 4. 切换用户
+    # 官方镜像默认就是 pptruser，但为了确保权限正确，我们显式指定一次
+    USER pptruser
+    
+    EXPOSE 3000
+    
+    # 官方镜像的 ENTRYPOINT 已经是 ["/sbin/tini", "--"] 或类似的处理程序
+    # 它可以完美替代 dumb-init。如果你习惯用自己的，也可以保留。
+    ENTRYPOINT ["dumb-init", "--"]
+    CMD ["node", "dist/index.js"]
