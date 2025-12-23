@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer, { type Browser } from "puppeteer";
 import type { CapturedResource } from "./type";
+import { PUPPETEER_EXECUTABLE_PATH } from "@/env";
 
 class ResourceGeneratorService {
 	private readonly requestHeader = "x-prefetcher-req-id";
@@ -18,8 +19,7 @@ class ResourceGeneratorService {
 			args: [
 				"--disable-gpu", // 主要参数：禁用GPU硬件加速
 			],
-			executablePath:
-				"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // TODO 使用系统已安装的Chrome
+			executablePath: PUPPETEER_EXECUTABLE_PATH,
 		});
 		const service = new ResourceGeneratorService(fastify, browser);
 		return service;
