@@ -18,9 +18,8 @@
     FROM ghcr.io/puppeteer/puppeteer:latest
     
     # 1. 核心环境变量
-    ENV NODE_ENV=production \
-        # 官方镜像已经安装了浏览器，通常在 /usr/bin/google-chrome
-        PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+    # 官方镜像已经安装了浏览器，通常在 /usr/bin/google-chrome
+    ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
     
     WORKDIR /app
     
@@ -40,7 +39,4 @@
     
     EXPOSE 3000
     
-    # 官方镜像的 ENTRYPOINT 已经是 ["/sbin/tini", "--"] 或类似的处理程序
-    # 它可以完美替代 dumb-init。如果你习惯用自己的，也可以保留。
-    ENTRYPOINT ["dumb-init", "--"]
-    CMD ["node", "dist/index.js"]
+    CMD ["node", "dist/index.js", "start"]
