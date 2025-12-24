@@ -17,7 +17,9 @@ class ResourceGeneratorService {
 		const browser = await puppeteer.launch({
 			headless,
 			args: [
-				"--disable-gpu", // 主要参数：禁用GPU硬件加速
+				'--no-sandbox',
+				'--disable-setuid-sandbox',
+				'--disable-dev-shm-usage', // Docker 环境下非常重要，防止内存溢出崩溃
 			],
 			executablePath: PUPPETEER_EXECUTABLE_PATH,
 		});

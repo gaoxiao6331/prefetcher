@@ -5,6 +5,10 @@ export interface Config {
 		jsDelivr?: {
 			localPath: string;
 			remoteAddr: string;
+			git?: {
+				name?: string;
+				email?: string;
+			}
 		};
 	};
 	crypto?: {

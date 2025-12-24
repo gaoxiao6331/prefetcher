@@ -8,15 +8,28 @@ import configPlugin from "../plugins/config";
 import loggerPlugin from "../plugins/logger";
 import monitorPlugin from "../plugins/monitor";
 import alertPlugin from "../plugins/alert";
+import fs from 'fs';
+import path from 'path';
 
 export default async function createFastifyInstance() {
+
+  // 1. 定义日志路径
+  const logDir = './logs';
+  const logFile = path.join(logDir, 'app.log');
+
+  // 2. 同步检查并创建目录 (recursive: true 支持多级创建)
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+
+  // 3. 初始化 Fastify
   const fastify = Fastify({
     logger: {
       transport: {
        targets: [
         {
           target: 'pino/file',
-          options: { destination: './logs/app.log' }
+          options: { destination: logFile }
         },
         {
           target: 'pino-pretty',

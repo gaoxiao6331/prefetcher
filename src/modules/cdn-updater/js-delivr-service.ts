@@ -10,14 +10,19 @@ const execPromise = promisify(exec);
 class JsDelivrService {
   private readonly localPath: string;
   private readonly remoteAddr: string;
+  private readonly gitName: string;
+  private readonly gitEmail: string;
 
   private constructor(private fastify: FastifyInstance) {
-    const { localPath, remoteAddr } = fastify.config.cdn?.jsDelivr || {};
+    const { localPath, remoteAddr, git } = fastify.config.cdn?.jsDelivr ?? {};
+    const { name, email } = git ?? { };
     if (!localPath || !remoteAddr) {
       throw new Error("Invalid jsDelivr config");
     }
     this.localPath = localPath;
     this.remoteAddr = remoteAddr;
+    this.gitName = name ?? '';
+    this.gitEmail = email ?? '';
   }
 
   static async create(fastify: FastifyInstance) {
@@ -28,8 +33,12 @@ class JsDelivrService {
 
   async initGit() {
     // Set git user info
-    await execPromise(`git config user.name "prefetch bot"`);
-    await execPromise(`git config user.email "gaoxiao6331@163.com"`);
+    if(this.gitName) {
+      await execPromise(`git config --global user.name "${this.gitName}"`);
+    }
+    if(this.gitEmail) {
+      await execPromise(`git config --global user.email "${this.gitEmail}"`);
+    }
   }
 
   parseRepoInfo(remoteAddr: string) {

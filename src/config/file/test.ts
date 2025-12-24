@@ -7,6 +7,10 @@ const config: Config = {
 	jsDelivr: {
 	  localPath: "../cdn-test",
 	  remoteAddr: "https://github.com/gaoxiao6331/cdn-test",
+    git: {
+      name: 'prefetch bot',
+      email: 'gaoxiao6331@163.com'
+    }
 	},
   },
   crypto: {

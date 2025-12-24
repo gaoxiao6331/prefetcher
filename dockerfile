@@ -3,6 +3,9 @@
 
     RUN corepack enable && corepack prepare pnpm@latest --activate
     WORKDIR /app
+
+    # 设置环境变量，防止在构建阶段下载多余的浏览器（节省空间和时间）
+    ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
     
     # 缓存依赖层
     COPY package.json pnpm-lock.yaml ./
@@ -17,21 +20,23 @@
     # 这个镜像本身就包含 Node.js 18/20 以及 dumb-init
     FROM ghcr.io/puppeteer/puppeteer:latest
     
-    # 1. 核心环境变量
-    # 官方镜像已经安装了浏览器，通常在 /usr/bin/google-chrome
-    ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-    
     WORKDIR /app
+
+    # 1. 自动寻找镜像中自带的 Chrome 路径
+    # 官方镜像的 Chrome 安装在 /home/pptruser/.cache/puppeteer/...
+    # 我们用 find 命令动态定位它，避免版本号变动导致失效
+    USER root
+    RUN CHROME_BIN=$(find /home/pptruser/.cache/puppeteer -name chrome -type f | head -n 1) && \
+        ln -s "$CHROME_BIN" /usr/bin/google-chrome-stable
+
+    # 2. 设置环境变量，让 Puppeteer 库直接使用这个路径
+    ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
     
-    # 2. 复制产物
+    # 3. 复制产物
     # 官方镜像默认创建了 pptruser 用户（UID 1000），直接使用即可
     COPY --from=builder --chown=pptruser:pptruser /app/node_modules ./node_modules
     COPY --from=builder --chown=pptruser:pptruser /app/dist ./dist
     COPY --from=builder --chown=pptruser:pptruser /app/package.json ./package.json
-    
-    # 3. 字体处理（可选）
-    # 官方镜像自带了基础中文字体。如果你有特殊的字体需求，可以额外安装，
-    # 但对于一般的中文网页渲染，官方镜像已经足够。
     
     # 4. 切换用户
     # 官方镜像默认就是 pptruser，但为了确保权限正确，我们显式指定一次
