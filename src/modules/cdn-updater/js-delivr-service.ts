@@ -3,11 +3,14 @@ import type { FastifyInstance } from "fastify";
 import fs from "fs";
 import path from "path";
 import { promisify } from "util";
+import axios from "axios";
 
 const execPromise = promisify(exec);
 
+import type { CdnUpdater, UploadResult } from "./type";
+
 // 使用这个服务前需要配置github ssh
-class JsDelivrService {
+class JsDelivrService implements CdnUpdater {
   private readonly localPath: string;
   private readonly remoteAddr: string;
   private readonly gitName: string;
@@ -15,7 +18,7 @@ class JsDelivrService {
 
   private constructor(private fastify: FastifyInstance) {
     const { localPath, remoteAddr, git } = fastify.config.cdn?.jsDelivr ?? {};
-    const { name, email } = git ?? { };
+    const { name, email } = git ?? {};
     if (!localPath || !remoteAddr) {
       throw new Error("Invalid jsDelivr config");
     }
@@ -27,17 +30,16 @@ class JsDelivrService {
 
   static async create(fastify: FastifyInstance) {
     const instance = new JsDelivrService(fastify);
-    await instance.initGit();
     return instance;
   }
 
-  async initGit() {
-    // Set git user info
-    if(this.gitName) {
-      await execPromise(`git config --global user.name "${this.gitName}"`);
+  // Configure git locally for the repository
+  private async configureGit(repoPath: string) {
+    if (this.gitName) {
+      await execPromise(`cd "${repoPath}" && git config user.name "${this.gitName}"`);
     }
-    if(this.gitEmail) {
-      await execPromise(`git config --global user.email "${this.gitEmail}"`);
+    if (this.gitEmail) {
+      await execPromise(`cd "${repoPath}" && git config user.email "${this.gitEmail}"`);
     }
   }
 
@@ -65,6 +67,9 @@ class JsDelivrService {
       );
       await execPromise(`git clone "${remoteAddr}" "${resolvedLocalPath}"`);
     }
+
+    // Ensure git config is set for this repository
+    await this.configureGit(resolvedLocalPath);
 
     // 检查本地是否存在branchName分支，不存在创建去远程拉取，远程不存在则创建
     try {
@@ -111,28 +116,11 @@ class JsDelivrService {
       fs.writeFileSync(resolvedFilePath, "");
     }
 
-    // 3. 检查当前file对应的git commit tag作为版本号
-    let version = 1;
-    try {
-      // Try to get the latest tag for this file
-      const tags = await this.getLatestTags(resolvedLocalPath, fileName);
-      if (tags.length > 0) {
-        const latestTag = tags[0];
-        const match = latestTag.match(new RegExp(`${fileName}-(\\d+)`));
-        if (match) {
-          version = parseInt(match[1], 10) + 1;
-        }
-      }
-    } catch (error) {
-      // If there's an error getting tags, we'll use the default version of 1
-      this.fastify.log.warn(
-        error,
-        "Could not retrieve git tags, using default version"
-      );
-    }
-
-    // 4. 初始版本号为{projectName}-{filename}-1，如果上一步没有获取到tag就使用初始值，否则最后的数字+1
-    const versionTag = `${fileName}-${version}`;
+    // 3. Generate version tag using timestamp for better uniqueness and simpler logic
+    const now = new Date();
+    // Format: YYYYMMDDHHmmss
+    const timestamp = now.toISOString().replace(/[-T:]/g, "").split(".")[0];
+    const versionTag = `${fileName}-${timestamp}`;
 
     // Write the content to the file
     fs.writeFileSync(resolvedFilePath, content);
@@ -165,23 +153,7 @@ class JsDelivrService {
     };
   }
 
-  private async getLatestTags(
-    projectPath: string,
-    fileName: string
-  ): Promise<string[]> {
-    try {
-      const { stdout } = await execPromise(
-        `cd "${projectPath}" && git tag --sort=-creatordate | grep "${fileName}"`
-      );
-      return stdout
-        .trim()
-        .split("\n")
-        .filter((tag) => tag.length > 0);
-    } catch (error) {
-      this.fastify.log.warn(error as Error, "Error getting git tags");
-      return [];
-    }
-  }
+
 
   private async gitAddCommitAndPush(
     localPath: string,
@@ -233,12 +205,18 @@ class JsDelivrService {
     // Using jsDelivr purge API
     const url = `https://purge.jsdelivr.net/gh/${namespace}/${projectName}@${branchName}/${relativeFilePath}`;
     this.fastify.log.info(`Purging jsDelivr cache: ${url}`);
-    const res = await execPromise(`curl -s "${url}"`);
-    // 检查返回的status 是否是finished
-    if (res.stdout.includes("finished")) {
-      this.fastify.log.info(`jsDelivr cache purge completed: ${url}`);
-    } else {
-      throw new Error(`jsDelivr cache purge failed: ${url}, ${res.stdout}`);
+
+    try {
+      const res = await axios.get(url, { timeout: 10000 });
+      // 检查返回的数据是否包含 finished
+      const data = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+      if (data.includes("finished") || res.data?.status === "finished") {
+        this.fastify.log.info(`jsDelivr cache purge completed: ${url}`);
+      } else {
+        throw new Error(`jsDelivr cache purge failed: ${url}, response: ${data}`);
+      }
+    } catch (error: any) {
+      throw new Error(`jsDelivr cache purge failed: ${url}, error: ${error.message}`);
     }
   }
 
@@ -255,20 +233,27 @@ class JsDelivrService {
   async verifyContentUpdate(url: string, content: string) {
     // Check if content is available via jsDelivr
     this.fastify.log.info(`Verifying content update: ${url}`);
-    const { stdout } = await execPromise(`curl -s "${url}"`);
 
-    if (stdout !== content) {
-      this.fastify.log.warn(
-        {
-          url,
-          expected: content,
-          got: stdout,
-        },
-        "Content verification failed: content mismatch"
-      );
+    try {
+      const res = await axios.get(url, { responseType: 'text', timeout: 10000 });
+      const remoteContent = res.data;
+
+      if (remoteContent !== content) {
+        this.fastify.log.warn(
+          {
+            url,
+            expectedLen: content.length,
+            gotLen: remoteContent.length,
+          },
+          "Content verification failed: content mismatch"
+        );
+        return false;
+      }
+      return true;
+    } catch (error) {
+      this.fastify.log.warn(`Failed to verify content update for ${url}: ${error}`);
       return false;
     }
-    return true;
   }
 }
 

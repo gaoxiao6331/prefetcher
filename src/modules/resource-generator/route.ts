@@ -33,15 +33,15 @@ const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
       if (notifications) {
         // 检查内容是否更新 因为cdn刷新延时，改成延时校验
         setTimeout(async () => {
-          const res = await cdnUpdaterService.verifyContentUpdate(url, content);
-          if (res) {
-            notifierService.info(`CDN更新成功！
-			${url}
-		`, notifications);
-          } else {
-            notifierService.error(`CDN更新失败！
-			${url}
-		`, notifications);
+          try {
+            const res = await cdnUpdaterService.verifyContentUpdate(url, content);
+            if (res) {
+              await notifierService.info(`CDN更新成功！\n${url}`, notifications);
+            } else {
+              await notifierService.error(`CDN更新失败！\n${url}`, notifications);
+            }
+          } catch (error) {
+            request.log.error(error, "Failed to send notification in deferred task");
           }
         }, 5000);
       }

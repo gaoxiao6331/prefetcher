@@ -14,32 +14,42 @@ import path from 'path';
 export default async function createFastifyInstance() {
 
   // 1. 定义日志路径
-  const logDir = './logs';
+  const logDir = process.env.LOG_DIR || './logs';
   const logFile = path.join(logDir, 'app.log');
+  const logToFile = process.env.LOG_TO_FILE !== 'false';
 
-  // 2. 同步检查并创建目录 (recursive: true 支持多级创建)
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
+  // 2. 异步检查并创建目录 (只有当需要写文件日志时)
+  if (logToFile) {
+    try {
+      await fs.promises.access(logDir);
+    } catch {
+      await fs.promises.mkdir(logDir, { recursive: true });
+    }
+  }
+
+  const logTargets: any[] = [
+    {
+      target: 'pino-pretty',
+      options: {
+        translateTime: 'HH:MM:ss Z',
+        ignore: 'pid,hostname',
+        colorize: true,
+      }
+    }
+  ];
+
+  if (logToFile) {
+    logTargets.push({
+      target: 'pino/file',
+      options: { destination: logFile }
+    });
   }
 
   // 3. 初始化 Fastify
   const fastify = Fastify({
     logger: {
       transport: {
-       targets: [
-        {
-          target: 'pino/file',
-          options: { destination: logFile }
-        },
-        {
-          target: 'pino-pretty',
-          options: {
-            translateTime: 'HH:MM:ss Z',
-            ignore: 'pid,hostname',
-            colorize: true,
-          }
-        }
-      ]
+        targets: logTargets
       },
     },
   });
@@ -62,13 +72,13 @@ export default async function createFastifyInstance() {
     fastify.log.error(error, `[GLOBAL]: Request failed: ${error.message}`);
     let code = error?.statusCode || 500;
     // 手动设置了相应的status code
-    if(reply.statusCode !== 200) {
+    if (reply.statusCode !== 200) {
       code = reply.statusCode
     }
     // Here we would send alerts to Sentry/PagerDuty etc.
     reply.send(error);
     // 非开发环境且是500错误
-    if(fastify.config.env !== 'dev' && code >= 500) {
+    if (fastify.config.env !== 'dev' && code >= 500) {
       fastify.alert(JSON.stringify({
         name: error.name,
         message: error.message,

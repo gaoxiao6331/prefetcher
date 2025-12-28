@@ -12,7 +12,7 @@ type MessageType = "info" | "error";
 
 // 使用这个服务前需要配置飞书webhook token
 class LarkNotifierService {
-  private constructor(private fastify: FastifyInstance) {}
+  private constructor(private fastify: FastifyInstance) { }
 
   static async create(fastify: FastifyInstance) {
     if (!fastify.config.crypto?.publicKey) {
@@ -96,15 +96,22 @@ class LarkNotifierService {
 
     const url = `https://open.feishu.cn/open-apis/bot/v2/hook/`;
 
-    const reqs = tokens.map(async (token) => {
-      const res = await axios.post(url + token, content);
-      // 请求状态是200且响应数据中code字段是0
-      if (res.status === 200 && res.data?.code === 0) {
-        return Promise.resolve("");
-      } else {
-        return Promise.reject(res.data?.msg || "Unknown error");
+    const sendWithRetry = async (token: string, retries = 3, delay = 1000) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          const res = await axios.post(url + token, content, { timeout: 5000 });
+          if (res.status === 200 && res.data?.code === 0) {
+            return;
+          }
+          throw new Error(res.data?.msg || `Lark API error: ${res.data?.code}`);
+        } catch (err) {
+          if (i === retries - 1) throw err;
+          await new Promise(r => setTimeout(r, delay * (i + 1))); // Exponential-ish backoff
+        }
       }
-    });
+    };
+
+    const reqs = tokens.map((token) => sendWithRetry(token));
 
     // 等待所有请求完成，无论成功还是失败
     const results = await Promise.allSettled(reqs);
@@ -114,11 +121,25 @@ class LarkNotifierService {
       // 出现错误抛出异常，因为会包含token信息，log要加密
       const key = this.fastify.config.crypto?.publicKey;
       const tokenStr = JSON.stringify(tokens);
-      const logTokens = key ? CryptoRsaUtil.encrypt(tokenStr, key) : tokenStr;
+      let logTokens = tokenStr;
+
+      if (key) {
+        try {
+          logTokens = CryptoRsaUtil.encrypt(tokenStr, key);
+        } catch (e) {
+          this.fastify.log.error(e, 'Failed to encrypt tokens for logging');
+          logTokens = '*** (Encryption Failed) ***';
+        }
+      }
+
+      const failedReasons = results
+        .filter(r => r.status === 'rejected')
+        .map(r => (r as PromiseRejectedResult).reason.message);
+
       throw new Error(
         `Failed to send message(s) to Lark.
-         Results: ${JSON.stringify(results)}
-        Tokens: ${logTokens}
+         Errors: ${JSON.stringify(failedReasons)}
+         Tokens (Encrypted): ${logTokens}
         `
       );
     }

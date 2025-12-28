@@ -17,7 +17,7 @@ const CONFIG = {
 class CryptoRsaUtil {
   private publicKey: string;
   private privateKey: string;
-  
+
   /**
    * 构造函数
    * @param modulusLength 密钥长度，默认 2048（推荐至少 2048）
@@ -81,9 +81,9 @@ class CryptoRsaUtil {
     return decrypted.toString('utf8');
   }
 
-   /**
-   * 获取公钥
-   */
+  /**
+  * 获取公钥
+  */
   getPublicKey(): string {
     return this.publicKey;
   }
@@ -99,13 +99,15 @@ class CryptoRsaUtil {
   /**
    * 保存密钥对到文件
    */
-  saveKeysToFile(directory: string = './keys'): void {
-    if (!fs.existsSync(directory)) {
-      fs.mkdirSync(directory, { recursive: true });
+  async saveKeysToFile(directory: string = './keys'): Promise<void> {
+    try {
+      await fs.promises.access(directory);
+    } catch {
+      await fs.promises.mkdir(directory, { recursive: true });
     }
 
-    fs.writeFileSync(path.join(directory, 'public.pem'), this.getPublicKey());
-    fs.writeFileSync(path.join(directory, 'private.pem'), this.getPrivateKey());
+    await fs.promises.writeFile(path.join(directory, 'public.pem'), this.getPublicKey());
+    await fs.promises.writeFile(path.join(directory, 'private.pem'), this.getPrivateKey());
   }
 
   encrypt(data: string): string {

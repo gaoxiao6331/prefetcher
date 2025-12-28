@@ -3,7 +3,7 @@ import fp from "fastify-plugin";
 import { LARK_BOT_TOKENS } from "@/env";
 
 const alertPlugin: FastifyPluginAsync = async (fastify) => {
-  const tokens = LARK_BOT_TOKENS.split(",");
+  const tokens = LARK_BOT_TOKENS;
   fastify.decorate("alert", async (message: string) => {
     try {
       const notifierService = fastify.notifierService;
