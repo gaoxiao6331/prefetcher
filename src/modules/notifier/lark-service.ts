@@ -1,4 +1,5 @@
 import CryptoRsaUtil from "@/utils/crypto-rsa";
+import { getLogger } from "@/utils/req-context";
 import axios from "axios";
 import { FastifyInstance } from "fastify";
 
@@ -21,9 +22,16 @@ class LarkNotifierService {
     return new LarkNotifierService(fastify);
   }
 
+  /**
+   * 获取 logger，优先使用带 traceId 的 logger
+   */
+  private get log() {
+    return getLogger() ?? this.fastify.log;
+  }
+
   private async send(message: string, type: MessageType, tokens: string[]) {
     if (!tokens || tokens.length === 0) {
-      this.fastify.log.error("No tokens provided");
+      this.log.error("No tokens provided");
       throw new Error("No tokens provided");
     }
     const configMap: Record<MessageType, MessageConfig> = {
@@ -127,7 +135,7 @@ class LarkNotifierService {
         try {
           logTokens = CryptoRsaUtil.encrypt(tokenStr, key);
         } catch (e) {
-          this.fastify.log.error(e, 'Failed to encrypt tokens for logging');
+          this.log.error(e, 'Failed to encrypt tokens for logging');
           logTokens = '*** (Encryption Failed) ***';
         }
       }

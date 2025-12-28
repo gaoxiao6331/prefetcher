@@ -4,6 +4,7 @@ import type { CapturedResource } from "./type";
 import { PUPPETEER_EXECUTABLE_PATH } from "@/env";
 
 import { Semaphore } from "@/utils/semaphore";
+import { getLogger } from "@/utils/req-context";
 
 class ResourceGeneratorService {
 	private readonly requestHeader = "x-prefetcher-req-id";
@@ -15,6 +16,13 @@ class ResourceGeneratorService {
 	private constructor(
 		private readonly fastify: FastifyInstance,
 	) { }
+
+	/**
+	 * 获取 logger，优先使用带 traceId 的 logger
+	 */
+	private get log() {
+		return getLogger() ?? this.fastify.log;
+	}
 
 	static async create(fastify: FastifyInstance) {
 		const service = new ResourceGeneratorService(fastify);
@@ -42,13 +50,13 @@ class ResourceGeneratorService {
 			});
 
 			this.browser.on('disconnected', () => {
-				this.fastify.log.warn('Puppeteer browser disconnected');
+				this.log.warn('Puppeteer browser disconnected');
 				this.browser = null;
 			});
 
-			this.fastify.log.info('Puppeteer browser initialized');
+			this.log.info('Puppeteer browser initialized');
 		} catch (error) {
-			this.fastify.log.error(error, "Failed to initialize puppeteer browser");
+			this.log.error(error, "Failed to initialize puppeteer browser");
 			throw error;
 		}
 	}
@@ -68,13 +76,13 @@ class ResourceGeneratorService {
 		if (this.browser) {
 			await this.browser.close();
 			this.browser = null;
-			this.fastify.log.info('Puppeteer browser closed');
+			this.log.info('Puppeteer browser closed');
 		}
 	}
 
 	private async getPage() {
 		if (!this.browser || !this.browser.connected) {
-			this.fastify.log.warn("Browser not connected, re-initializing...");
+			this.log.warn("Browser not connected, re-initializing...");
 			await this.initBrowser();
 		}
 
@@ -142,7 +150,7 @@ class ResourceGeneratorService {
 
 					request.continue({ headers });
 				} catch (err) {
-					this.fastify.log.warn(`Request interception failed: ${err}`);
+					this.log.warn(`Request interception failed: ${err}`);
 					if (!request.isInterceptResolutionHandled()) {
 						request.continue();
 					}
@@ -192,17 +200,12 @@ class ResourceGeneratorService {
 					requestStartTimeMap.delete(requestId);
 
 				} catch (err) {
-					this.fastify.log.warn(`Response processing failed: ${err}`);
+					this.log.warn(`Response processing failed: ${err}`);
 				}
 			});
 
-			try {
-				// networkidle2: consider navigation finished when there are no more than 2 network connections for at least 500ms
-				await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-			} catch (error) {
-				this.fastify.log.error(`Page navigation error for ${url}: ${error}`);
-				throw error;
-			}
+			// networkidle2: consider navigation finished when there are no more than 2 network connections for at least 500ms
+			await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
 			// Filter and rank resources before returning
 			const res = this.rank(this.filter(capturedResources));

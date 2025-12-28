@@ -10,6 +10,39 @@ import monitorPlugin from "../plugins/monitor";
 import alertPlugin from "../plugins/alert";
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+import { reqStorage } from './req-context';
+
+const REQ_ID_HEADER = "x-req-id";
+
+/**
+ * 格式化时间为 yyyyMMddHHmmss
+ */
+const formatDateTime = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}${month}${day}${hours}${minutes}${seconds}`;
+};
+
+/**
+ * 生成唯一的 requestId
+ */
+const generateReqId = (): string => {
+  const dateTime = formatDateTime(new Date());
+  const random = crypto.randomBytes(4).toString("hex");
+  return `${dateTime}${random}`;
+};
+
+// 扩展 FastifyRequest 类型
+declare module "fastify" {
+  interface FastifyRequest {
+    reqId: string;
+  }
+}
 
 export default async function createFastifyInstance() {
 
@@ -52,6 +85,13 @@ export default async function createFastifyInstance() {
         targets: logTargets
       },
     },
+    genReqId: (req) => {
+      // 优先使用请求头中的 requestId（支持分布式追踪）
+      const incomingReqId = req.headers[REQ_ID_HEADER] as string | undefined;
+      return incomingReqId || generateReqId();
+    },
+    requestIdLogLabel: 'reqId',
+    requestIdHeader: REQ_ID_HEADER,
   });
 
   // Register core plugins
@@ -66,6 +106,26 @@ export default async function createFastifyInstance() {
   await fastify.register(monitorPlugin);
   await fastify.register(alertPlugin);
   await fastify.register(configPlugin);
+
+  // requestId 相关 hooks
+  fastify.addHook("onRequest", async (request, reply) => {
+    // 将 request.id 映射到 request.requestId，方便业务代码使用
+    request.reqId = request.id;
+
+    // 将 requestId 和 logger 存储到 AsyncLocalStorage 中
+    // 这样业务代码可以通过 getLogger() 获取带 requestId 的 logger
+    reqStorage.enterWith({
+      reqId: request.reqId,
+      logger: request.log,
+    });
+  });
+
+  fastify.addHook("onSend", async (request, reply) => {
+    // 在响应头中返回 request id
+    reply.header(REQ_ID_HEADER, request.reqId);
+  });
+
+  fastify.log.info("ReqId configured");
 
   // Global Error Handler Stub for Alerting
   fastify.setErrorHandler((error, request, reply) => {

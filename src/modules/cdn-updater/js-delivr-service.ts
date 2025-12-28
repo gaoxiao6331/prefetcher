@@ -8,6 +8,7 @@ import axios from "axios";
 const execPromise = promisify(exec);
 
 import type { CdnUpdater, UploadResult } from "./type";
+import { getLogger } from "@/utils/req-context";
 
 // 使用这个服务前需要配置github ssh
 class JsDelivrService implements CdnUpdater {
@@ -31,6 +32,13 @@ class JsDelivrService implements CdnUpdater {
   static async create(fastify: FastifyInstance) {
     const instance = new JsDelivrService(fastify);
     return instance;
+  }
+
+  /**
+   * 获取 logger，优先使用带 traceId 的 logger
+   */
+  private get log() {
+    return getLogger() ?? this.fastify.log;
   }
 
   // Configure git locally for the repository
@@ -62,7 +70,7 @@ class JsDelivrService implements CdnUpdater {
     const resolvedLocalPath = path.resolve(localPath);
     if (!fs.existsSync(resolvedLocalPath)) {
       // 不存在从远程拉取
-      this.fastify.log.info(
+      this.log.info(
         `Local path "${resolvedLocalPath}" does not exist, cloning remote repository`
       );
       await execPromise(`git clone "${remoteAddr}" "${resolvedLocalPath}"`);
@@ -78,7 +86,7 @@ class JsDelivrService implements CdnUpdater {
         `cd "${resolvedLocalPath}" && git rev-parse --verify "${branchName}"`
       );
       // Branch exists, switch to it
-      this.fastify.log.info(
+      this.log.info(
         `Branch "${branchName}" exists locally, switching to it`
       );
       await execPromise(
@@ -91,7 +99,7 @@ class JsDelivrService implements CdnUpdater {
           `cd "${resolvedLocalPath}" && git rev-parse --verify "origin/${branchName}"`
         );
         // Branch exists remotely, check it out
-        this.fastify.log.info(
+        this.log.info(
           `Branch "${branchName}" exists remotely, checking it out`
         );
         await execPromise(
@@ -100,7 +108,7 @@ class JsDelivrService implements CdnUpdater {
       } catch (remoteError) {
         // Branch doesn't exist remotely either, create it
         // TODO 清空main分支，基于空白分支创建新分支
-        this.fastify.log.info(
+        this.log.info(
           `Branch "${branchName}" does not exist, creating it`
         );
         await execPromise(
@@ -177,7 +185,7 @@ class JsDelivrService implements CdnUpdater {
       `cd "${resolvedLocalPath}" && git status --porcelain`
     );
     if (statusOutput.trim() === "") {
-      this.fastify.log.info("No changes to commit");
+      this.log.info("No changes to commit");
       return;
     }
 
@@ -204,14 +212,14 @@ class JsDelivrService implements CdnUpdater {
   ): Promise<void> {
     // Using jsDelivr purge API
     const url = `https://purge.jsdelivr.net/gh/${namespace}/${projectName}@${branchName}/${relativeFilePath}`;
-    this.fastify.log.info(`Purging jsDelivr cache: ${url}`);
+    this.log.info(`Purging jsDelivr cache: ${url}`);
 
     try {
       const res = await axios.get(url, { timeout: 10000 });
       // 检查返回的数据是否包含 finished
       const data = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
       if (data.includes("finished") || res.data?.status === "finished") {
-        this.fastify.log.info(`jsDelivr cache purge completed: ${url}`);
+        this.log.info(`jsDelivr cache purge completed: ${url}`);
       } else {
         throw new Error(`jsDelivr cache purge failed: ${url}, response: ${data}`);
       }
@@ -232,14 +240,14 @@ class JsDelivrService implements CdnUpdater {
 
   async verifyContentUpdate(url: string, content: string) {
     // Check if content is available via jsDelivr
-    this.fastify.log.info(`Verifying content update: ${url}`);
+    this.log.info(`Verifying content update: ${url}`);
 
     try {
       const res = await axios.get(url, { responseType: 'text', timeout: 10000 });
       const remoteContent = res.data;
 
       if (remoteContent !== content) {
-        this.fastify.log.warn(
+        this.log.warn(
           {
             url,
             expectedLen: content.length,
@@ -251,7 +259,7 @@ class JsDelivrService implements CdnUpdater {
       }
       return true;
     } catch (error) {
-      this.fastify.log.warn(`Failed to verify content update for ${url}: ${error}`);
+      this.log.warn(`Failed to verify content update for ${url}: ${error}`);
       return false;
     }
   }
