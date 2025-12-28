@@ -35,4 +35,12 @@ program
     tools.decrypt(opts);
   });
 
+program
+  .command("release-port")
+  .description("release port")
+  .argument("<port>", "port to release")
+  .action((port) => {
+    tools.releasePort(port);
+  });
+
 program.parse();
