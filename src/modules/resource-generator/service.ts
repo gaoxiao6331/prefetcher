@@ -4,7 +4,7 @@ import type { CapturedResource } from "./type";
 import { PUPPETEER_EXECUTABLE_PATH } from "@/env";
 
 import { Semaphore } from "@/utils/semaphore";
-import { getLogger } from "@/utils/req-context";
+import { getLogger, bindAsyncContext } from "@/utils/trace-context";
 
 class ResourceGeneratorService {
 	private readonly requestHeader = "x-prefetcher-req-id";
@@ -124,7 +124,8 @@ class ResourceGeneratorService {
 			// Enable request interception to inject tracking headers
 			await page.setRequestInterception(true);
 
-			page.on("request", (request) => {
+			// 使用 bindAsyncContext 绑定上下文，确保事件回调中 getLogger() 能正常工作
+			page.on("request", bindAsyncContext((request) => {
 				if (request.isInterceptResolutionHandled()) return;
 
 				// Only track GET requests, but ensure others are allowed to continue
@@ -155,9 +156,9 @@ class ResourceGeneratorService {
 						request.continue();
 					}
 				}
-			});
+			}));
 
-			page.on("response", async (response) => {
+			page.on("response", bindAsyncContext(async (response) => {
 				try {
 					const request = response.request();
 					if (request.method() !== "GET") return;
@@ -202,7 +203,7 @@ class ResourceGeneratorService {
 				} catch (err) {
 					this.log.warn(`Response processing failed: ${err}`);
 				}
-			});
+			}));
 
 			// networkidle2: consider navigation finished when there are no more than 2 network connections for at least 500ms
 			await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });

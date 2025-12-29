@@ -1,5 +1,5 @@
 import CryptoRsaUtil from "@/utils/crypto-rsa";
-import { getLogger } from "@/utils/req-context";
+import { getLogger } from "@/utils/trace-context";
 import axios from "axios";
 import { FastifyInstance } from "fastify";
 

@@ -8,7 +8,7 @@ import axios from "axios";
 const execPromise = promisify(exec);
 
 import type { CdnUpdater, UploadResult } from "./type";
-import { getLogger } from "@/utils/req-context";
+import { getLogger } from "@/utils/trace-context";
 
 // 使用这个服务前需要配置github ssh
 class JsDelivrService implements CdnUpdater {

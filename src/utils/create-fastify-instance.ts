@@ -11,9 +11,9 @@ import alertPlugin from "../plugins/alert";
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { reqStorage } from './req-context';
+import { traceStorage } from './trace-context';
 
-const REQ_ID_HEADER = "x-req-id";
+const TRACE_ID_HEADER = "x-trace-id";
 
 /**
  * 格式化时间为 yyyyMMddHHmmss
@@ -29,9 +29,9 @@ const formatDateTime = (date: Date): string => {
 };
 
 /**
- * 生成唯一的 requestId
+ * 生成唯一的 traceId
  */
-const generateReqId = (): string => {
+const generateTraceId = (): string => {
   const dateTime = formatDateTime(new Date());
   const random = crypto.randomBytes(4).toString("hex");
   return `${dateTime}${random}`;
@@ -40,7 +40,7 @@ const generateReqId = (): string => {
 // 扩展 FastifyRequest 类型
 declare module "fastify" {
   interface FastifyRequest {
-    reqId: string;
+    traceId: string;
   }
 }
 
@@ -86,12 +86,12 @@ export default async function createFastifyInstance() {
       },
     },
     genReqId: (req) => {
-      // 优先使用请求头中的 requestId（支持分布式追踪）
-      const incomingReqId = req.headers[REQ_ID_HEADER] as string | undefined;
-      return incomingReqId || generateReqId();
+      // 优先使用请求头中的 traceId（支持分布式追踪）
+      const incomingTraceId = req.headers[TRACE_ID_HEADER] as string | undefined;
+      return incomingTraceId || generateTraceId();
     },
-    requestIdLogLabel: 'reqId',
-    requestIdHeader: REQ_ID_HEADER,
+    requestIdLogLabel: 'traceId',
+    requestIdHeader: TRACE_ID_HEADER,
   });
 
   // Register core plugins
@@ -107,25 +107,25 @@ export default async function createFastifyInstance() {
   await fastify.register(alertPlugin);
   await fastify.register(configPlugin);
 
-  // requestId 相关 hooks
+  // traceId 相关 hooks
   fastify.addHook("onRequest", async (request, reply) => {
-    // 将 request.id 映射到 request.requestId，方便业务代码使用
-    request.reqId = request.id;
+    // 将 request.id 映射到 request.traceId，方便业务代码使用
+    request.traceId = request.id;
 
-    // 将 requestId 和 logger 存储到 AsyncLocalStorage 中
-    // 这样业务代码可以通过 getLogger() 获取带 requestId 的 logger
-    reqStorage.enterWith({
-      reqId: request.reqId,
+    // 将 traceId 和 logger 存储到 AsyncLocalStorage 中
+    // 这样业务代码可以通过 getLogger() 获取带 traceId 的 logger
+    traceStorage.enterWith({
+      traceId: request.traceId,
       logger: request.log,
     });
   });
 
   fastify.addHook("onSend", async (request, reply) => {
-    // 在响应头中返回 request id
-    reply.header(REQ_ID_HEADER, request.reqId);
+    // 在响应头中返回 trace id
+    reply.header(TRACE_ID_HEADER, request.traceId);
   });
 
-  fastify.log.info("ReqId configured");
+  fastify.log.info("TraceId configured");
 
   // Global Error Handler Stub for Alerting
   fastify.setErrorHandler((error, request, reply) => {
