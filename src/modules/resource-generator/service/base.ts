@@ -1,19 +1,19 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer, { type Browser } from "puppeteer";
-import type { CapturedResource } from "./type";
+import type { CapturedResource, ResourceGeneratorService } from "../type";
 import { PUPPETEER_EXECUTABLE_PATH } from "@/env";
 
 import { Semaphore } from "@/utils/semaphore";
 import { getLogger, bindAsyncContext } from "@/utils/trace-context";
 
-class ResourceGeneratorService {
+abstract class BaseService implements ResourceGeneratorService {
 	private readonly requestHeader = "x-prefetcher-req-id";
 
 	private browser: Browser | null = null;
 	// Limit concurrent pages to 5 to avoid crashing the server
 	private readonly semaphore = new Semaphore(5);
 
-	private constructor(
+	constructor(
 		private readonly fastify: FastifyInstance,
 	) { }
 
@@ -24,8 +24,8 @@ class ResourceGeneratorService {
 		return getLogger() ?? this.fastify.log;
 	}
 
-	static async create(fastify: FastifyInstance) {
-		const service = new ResourceGeneratorService(fastify);
+	static async create(this: new (fastify: FastifyInstance) => BaseService, fastify: FastifyInstance) {
+		const service = new this(fastify);
 		await service.initBrowser();
 		return service;
 	}
@@ -61,15 +61,9 @@ class ResourceGeneratorService {
 		}
 	}
 
-	private filter(resource: CapturedResource[]) {
-		// 只保留js文件
-		return resource.filter((item) => item.type === "script");
-	}
+	protected abstract filter(resource: CapturedResource[]): CapturedResource[];
 
-	private rank(res: CapturedResource[]) {
-		// 按照资源体积从大到小排序
-		return res.sort((a, b) => b.sizeKB - a.sizeKB);
-	}
+	protected abstract rank(res: CapturedResource[]): CapturedResource[];
 
 	// Public close method to be called on shutdown
 	async close() {
@@ -215,4 +209,4 @@ class ResourceGeneratorService {
 	}
 }
 
-export default ResourceGeneratorService;
+export default BaseService;

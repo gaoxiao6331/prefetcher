@@ -7,3 +7,7 @@ export interface CapturedResource {
 	responseTime: number;
 	durationMs: number;
 }
+
+export interface ResourceGeneratorService {
+    captureResources(url: string): Promise<string[]>;
+}
