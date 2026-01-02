@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { version } from "../package.json";
 import { start } from "./start";
+import chalk from "chalk";
 
 const program = new Command();
 
@@ -12,8 +13,12 @@ program
 program
   .command("start")
   .description("start the prefetcher server")
-  .action(() => {
-    start();
+  .option("-d, --debug", "enable debug mode", false)
+  .action((opts) => {
+    if(opts.debug) {
+      console.log(chalk.green('Debug mode is on'))
+    }
+    start(opts);
   });
 
 program.parse();

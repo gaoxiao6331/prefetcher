@@ -5,6 +5,7 @@ import { PUPPETEER_EXECUTABLE_PATH, env } from "@/env";
 
 import { Semaphore } from "@/utils/semaphore";
 import { getLogger, bindAsyncContext } from "@/utils/trace-context";
+import { isDebugMode } from "@/utils/is";
 
 abstract class BaseService implements ResourceGeneratorService {
 	private readonly requestHeader = "x-prefetcher-req-id";
@@ -38,7 +39,7 @@ abstract class BaseService implements ResourceGeneratorService {
 				await this.browser.close();
 			}
 
-			const headless = env !== "dev";
+			const headless = !isDebugMode();
 			this.browser = await puppeteer.launch({
 				headless,
 				args: [

@@ -1,5 +1,2 @@
-declare namespace NodeJS {
-	interface ProcessEnv {
-		NODE_ENV: "dev" | "prod";
-	}
-}
+var config: import('./src/config/type').Config;
+var startParams: import('./src/start').StartParams;

@@ -12,7 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { traceStorage } from './trace-context';
-import { env } from '@/env';
+import { isDebugMode } from "./is";
 
 const TRACE_ID_HEADER = "x-trace-id";
 
@@ -138,8 +138,8 @@ export default async function createFastifyInstance() {
     }
     // Here we would send alerts to Sentry/PagerDuty etc.
     reply.send(error);
-    // 非开发环境且是500错误
-    if (env !== 'dev' && code >= 500) {
+    // 非调试模式且是500错误
+    if (!isDebugMode() && code >= 500) {
       fastify.alert(JSON.stringify({
         name: error.name,
         message: error.message,
