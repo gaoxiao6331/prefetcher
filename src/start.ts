@@ -2,6 +2,7 @@ import cdnUpdaterModule from "@/modules/cdn-updater";
 import resourceGeneratorModule from "@/modules/resource-generator";
 import notifierModule from "@/modules/notifier";
 import createFastifyInstance from "@/utils/create-fastify-instance";
+import { env } from '@/env';
 
 export const start = async () => {
 	const fastify = await createFastifyInstance();
@@ -10,8 +11,6 @@ export const start = async () => {
 	await fastify.register(notifierModule);
 	await fastify.register(resourceGeneratorModule);
 	await fastify.register(cdnUpdaterModule);
-
-	
 
 	try {
 		const port = fastify.config.port ?? 3000;
@@ -38,7 +37,7 @@ export const start = async () => {
 
 	process.on("unhandledRejection", (reason, promise) => {
 		fastify.log.error(reason, "Unhandled Rejection occurred");
-		if(fastify.config.env !== 'dev') {
+		if(env !== 'dev') {
 			fastify.alert(`Unhandled Rejection occurred: ${reason}`);
 		}
 	});
@@ -46,7 +45,7 @@ export const start = async () => {
 	// 捕获未处理的异常
 	process.on("uncaughtException", (error) => {
 		fastify.log.error(error, "Uncaught Exception occurred");
-		if(fastify.config.env !== 'dev') {
+		if(env !== 'dev') {
 			fastify.alert(`Uncaught Exception occurred: ${error}`);
 		}
 	});

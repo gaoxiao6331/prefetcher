@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer, { type Browser } from "puppeteer";
 import type { CapturedResource, ResourceGeneratorService } from "../type";
-import { PUPPETEER_EXECUTABLE_PATH } from "@/env";
+import { PUPPETEER_EXECUTABLE_PATH, env } from "@/env";
 
 import { Semaphore } from "@/utils/semaphore";
 import { getLogger, bindAsyncContext } from "@/utils/trace-context";
@@ -38,7 +38,7 @@ abstract class BaseService implements ResourceGeneratorService {
 				await this.browser.close();
 			}
 
-			const headless = this.fastify.config.env !== "dev";
+			const headless = env !== "dev";
 			this.browser = await puppeteer.launch({
 				headless,
 				args: [

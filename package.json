@@ -5,9 +5,9 @@
     "main": "dist/index.js",
     "scripts": {
         "dev": "cross-env NODE_ENV=dev nodemon",
-        "build": "tsc && tsc-alias",
+        "build": "tsc -p tsconfig.build.json && tsc-alias",
         "start": "node dist/index.js start",
-        "tool": "pnpm build && node dist/index.js",
+        "tool": "ts-node -r tsconfig-paths/register --files ./src/index.ts start",
         "run:prod": "pnpm build && cross-env NODE_ENV=prod pnpm start",
         "clean": "rm -rf dist",
         "format": "biome format --write .",
