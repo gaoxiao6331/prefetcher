@@ -1,5 +1,5 @@
 export interface Config {
-	env: "dev" | "test" | "prod";
+	env: string;
 	port: number;
 	cdn?: {
 		jsDelivr?: {
