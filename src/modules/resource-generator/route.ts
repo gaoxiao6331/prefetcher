@@ -45,7 +45,7 @@ const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
 							);
 						} else {
 							await notifierService.error(
-								`CDN更新失败！\n${url}`,
+								`CDN更新校验失败！\ntrace-id:${request.traceId}\n${url}`,
 								notifications,
 							);
 						}
