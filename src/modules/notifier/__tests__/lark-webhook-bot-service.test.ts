@@ -1,7 +1,7 @@
 import axios from "axios";
 import type { FastifyInstance } from "fastify";
 import CryptoRsaUtil from "@/utils/crypto-rsa";
-import LarkService from "../lark-service";
+import LarkService from "../lark-webhook-bot-service";
 
 jest.mock("axios");
 jest.mock("@/utils/crypto-rsa");
