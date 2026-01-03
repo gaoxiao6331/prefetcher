@@ -5,7 +5,8 @@ const config: Config = {
 	cdn: {
 		jsDelivr: {
 			localPath: "../cdn-test",
-			remoteAddr: "https://github.com/gaoxiao6331/cdn-test",
+			// 这里需要用ssh，否则需要登录
+			remoteAddr: "git@github.com:gaoxiao6331/cdn-test.git",
 			git: {
 				name: "prefetch bot",
 				email: "gaoxiao6331@163.com",

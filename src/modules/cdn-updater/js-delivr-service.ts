@@ -56,8 +56,8 @@ class JsDelivrService implements CdnUpdaterService {
 	}
 
 	parseRepoInfo(remoteAddr: string) {
-		// 解析github远程仓库的用户名和项目名 eg：https://github.com/gaoxiao6331/cdn-test
-		const match = remoteAddr.match(/https:\/\/github.com\/([^/]+)\/([^/]+)/);
+		// 解析github远程仓库的用户名和项目名 eg：git@github.com:gaoxiao6331/cdn-test.git
+		const match = remoteAddr.match(/git@github.com:([^/]+)\/([^/]+)\.git$/);
 		if (!match) {
 			throw new Error("Invalid github remote address");
 		}
@@ -256,8 +256,8 @@ class JsDelivrService implements CdnUpdaterService {
 				this.log.warn(
 					{
 						url,
-						expectedLen: content.length,
-						gotLen: remoteContent.length,
+						expectedLen: content,
+						gotLen: remoteContent,
 					},
 					"Content verification failed: content mismatch",
 				);
