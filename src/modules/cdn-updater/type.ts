@@ -8,7 +8,7 @@ export interface UploadResult {
 /**
  * Interface for CDN Provider (e.g., JsDelivr, S3, OSS)
  */
-export interface CdnUpdater {
+export interface CdnUpdaterService {
 	/**
 	 * Upload content to the CDN provider.
 	 * @param branchName Target branch name (or bucket/folder concept)

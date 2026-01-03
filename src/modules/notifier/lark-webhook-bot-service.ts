@@ -2,6 +2,7 @@ import axios from "axios";
 import type { FastifyInstance } from "fastify";
 import CryptoRsaUtil from "@/utils/crypto-rsa";
 import { getLogger } from "@/utils/trace-context";
+import { NotifierService } from "./type";
 
 interface MessageConfig {
 	color: string;
@@ -9,17 +10,17 @@ interface MessageConfig {
 	extraElements: any[];
 }
 
-type MessageType = "info" | "error";
+type MessageType = "info" | "warn" | "error";
 
 // 使用这个服务前需要配置飞书webhook token
-class LarkNotifierService {
+class LarkWebhookBotService implements NotifierService {
 	private constructor(private fastify: FastifyInstance) {}
 
 	static async create(fastify: FastifyInstance) {
 		if (!fastify.config.crypto?.publicKey) {
 			fastify.log.warn("Crypto config is missing");
 		}
-		return new LarkNotifierService(fastify);
+		return new LarkWebhookBotService(fastify);
 	}
 
 	/**
@@ -38,6 +39,11 @@ class LarkNotifierService {
 			info: {
 				color: "green",
 				content: "通知",
+				extraElements: [],
+			},
+			warn: {
+				color: "yellow",
+				content: "⚠️警告⚠️",
 				extraElements: [],
 			},
 			error: {
@@ -157,9 +163,13 @@ class LarkNotifierService {
 		await this.send(message, "info", tokens);
 	}
 
+	async warn(message: string, tokens: string[]) {
+		await this.send(message, "info", tokens);
+	}
+
 	async error(message: string, tokens: string[]) {
 		await this.send(message, "error", tokens);
 	}
 }
 
-export default LarkNotifierService;
+export default LarkWebhookBotService;

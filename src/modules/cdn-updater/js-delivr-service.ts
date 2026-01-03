@@ -8,10 +8,10 @@ import { promisify } from "util";
 const execPromise = promisify(exec);
 
 import { getLogger } from "@/utils/trace-context";
-import type { CdnUpdater, UploadResult } from "./type";
+import type { CdnUpdaterService, UploadResult } from "./type";
 
 // 使用这个服务前需要配置github ssh
-class JsDelivrService implements CdnUpdater {
+class JsDelivrService implements CdnUpdaterService {
 	private readonly localPath: string;
 	private readonly remoteAddr: string;
 	private readonly gitName: string;

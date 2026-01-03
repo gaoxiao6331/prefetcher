@@ -1,8 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import JsDelivrService from "./js-delivr-service";
-
-import type { CdnUpdater } from "./type";
+import type { CdnUpdaterService } from "./type";
 
 const cdnUpdaterServiceModule: FastifyPluginAsync = async (fastify, opts) => {
 	const jsDelivrService = await JsDelivrService.create(fastify);
@@ -11,7 +10,7 @@ const cdnUpdaterServiceModule: FastifyPluginAsync = async (fastify, opts) => {
 
 declare module "fastify" {
 	interface FastifyInstance {
-		cdnUpdaterService: CdnUpdater;
+		cdnUpdaterService: CdnUpdaterService;
 	}
 }
 
