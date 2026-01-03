@@ -7,7 +7,7 @@ export interface Config {
 			git?: {
 				name?: string;
 				email?: string;
-			}
+			};
 		};
 	};
 	crypto?: {

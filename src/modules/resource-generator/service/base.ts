@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer, { type Browser } from "puppeteer";
-import type { CapturedResource, ResourceGeneratorService } from "../type";
-import { PUPPETEER_EXECUTABLE_PATH, env } from "@/env";
+import { env, PUPPETEER_EXECUTABLE_PATH } from "@/env";
+import { isDebugMode } from "@/utils/is";
 
 import { Semaphore } from "@/utils/semaphore";
-import { getLogger, bindAsyncContext } from "@/utils/trace-context";
-import { isDebugMode } from "@/utils/is";
+import { bindAsyncContext, getLogger } from "@/utils/trace-context";
+import type { CapturedResource, ResourceGeneratorService } from "../type";
 
 abstract class BaseService implements ResourceGeneratorService {
 	private readonly requestHeader = "x-prefetcher-req-id";
@@ -14,9 +14,7 @@ abstract class BaseService implements ResourceGeneratorService {
 	// Limit concurrent pages to 5 to avoid crashing the server
 	private readonly semaphore = new Semaphore(5);
 
-	constructor(
-		private readonly fastify: FastifyInstance,
-	) { }
+	constructor(private readonly fastify: FastifyInstance) {}
 
 	/**
 	 * 获取 logger，优先使用带 traceId 的 logger
@@ -25,8 +23,13 @@ abstract class BaseService implements ResourceGeneratorService {
 		return getLogger() ?? this.fastify.log;
 	}
 
-	static async create(this: new (fastify: FastifyInstance) => BaseService, fastify: FastifyInstance) {
-		const service = new this(fastify);
+	static async create(
+		this: new (
+			fastify: FastifyInstance,
+		) => BaseService,
+		fastify: FastifyInstance,
+	) {
+		const service = new BaseService(fastify);
 		await service.initBrowser();
 		return service;
 	}
@@ -43,19 +46,19 @@ abstract class BaseService implements ResourceGeneratorService {
 			this.browser = await puppeteer.launch({
 				headless,
 				args: [
-					'--no-sandbox',
-					'--disable-setuid-sandbox',
-					'--disable-dev-shm-usage',
+					"--no-sandbox",
+					"--disable-setuid-sandbox",
+					"--disable-dev-shm-usage",
 				],
 				executablePath: PUPPETEER_EXECUTABLE_PATH,
 			});
 
-			this.browser.on('disconnected', () => {
-				this.log.warn('Puppeteer browser disconnected');
+			this.browser.on("disconnected", () => {
+				this.log.warn("Puppeteer browser disconnected");
 				this.browser = null;
 			});
 
-			this.log.info('Puppeteer browser initialized');
+			this.log.info("Puppeteer browser initialized");
 		} catch (error) {
 			this.log.error(error, "Failed to initialize puppeteer browser");
 			throw error;
@@ -71,7 +74,7 @@ abstract class BaseService implements ResourceGeneratorService {
 		if (this.browser) {
 			await this.browser.close();
 			this.browser = null;
-			this.log.info('Puppeteer browser closed');
+			this.log.info("Puppeteer browser closed");
 		}
 	}
 
@@ -101,7 +104,7 @@ abstract class BaseService implements ResourceGeneratorService {
 	/**
 	 * Capture resources (specifically JS files) loaded by a target URL.
 	 * Uses Puppeteer to render the page and intercept network requests.
-	 * 
+	 *
 	 * @param url Target URL to inspect
 	 * @returns List of captured resource URLs (sorted by size)
 	 */
@@ -120,85 +123,90 @@ abstract class BaseService implements ResourceGeneratorService {
 			await page.setRequestInterception(true);
 
 			// 使用 bindAsyncContext 绑定上下文，确保事件回调中 getLogger() 能正常工作
-			page.on("request", bindAsyncContext((request) => {
-				if (request.isInterceptResolutionHandled()) return;
+			page.on(
+				"request",
+				bindAsyncContext((request) => {
+					if (request.isInterceptResolutionHandled()) return;
 
-				// Only track GET requests, but ensure others are allowed to continue
-				if (request.method() !== "GET") {
-					request.continue();
-					return;
-				}
-
-				try {
-					id++;
-					const requestId = id.toString();
-					// Inject a custom header to correlate request and response later
-					const headers = {
-						...request.headers(),
-						[this.requestHeader]: requestId,
-					};
-
-					// Record start time
-					requestStartTimeMap.set(requestId, {
-						url: request.url(),
-						timestamp: Date.now(),
-					});
-
-					request.continue({ headers });
-				} catch (err) {
-					this.log.warn(`Request interception failed: ${err}`);
-					if (!request.isInterceptResolutionHandled()) {
+					// Only track GET requests, but ensure others are allowed to continue
+					if (request.method() !== "GET") {
 						request.continue();
+						return;
 					}
-				}
-			}));
 
-			page.on("response", bindAsyncContext(async (response) => {
-				try {
-					const request = response.request();
-					if (request.method() !== "GET") return;
-
-					// Try to get requestId
-					// Note: Not all requests accept headers (e.g. redirects). Skip if ID is missing.
-					const headers = request.headers();
-					const requestId = headers[this.requestHeader];
-
-					// If ID is missing in headers, skip.
-					if (!requestId) return;
-
-					const requestInfo = requestStartTimeMap.get(requestId);
-					if (!requestInfo) return;
-
-					const status = response.status();
-					// Only record successful requests (2xx)
-					if (status < 200 || status >= 300) return;
-
-					let resourceSizeKB = 0;
 					try {
-						const buffer = await response.buffer();
-						resourceSizeKB = buffer.length / 1024;
-					} catch (e) {
-						// Ignored: Buffer access might fail for various reasons (CORS, etc.)
+						id++;
+						const requestId = id.toString();
+						// Inject a custom header to correlate request and response later
+						const headers = {
+							...request.headers(),
+							[this.requestHeader]: requestId,
+						};
+
+						// Record start time
+						requestStartTimeMap.set(requestId, {
+							url: request.url(),
+							timestamp: Date.now(),
+						});
+
+						request.continue({ headers });
+					} catch (err) {
+						this.log.warn(`Request interception failed: ${err}`);
+						if (!request.isInterceptResolutionHandled()) {
+							request.continue();
+						}
 					}
+				}),
+			);
 
-					const now = Date.now();
-					capturedResources.push({
-						url: response.url(),
-						status: status,
-						type: request.resourceType(),
-						sizeKB: resourceSizeKB,
-						requestTime: requestInfo.timestamp,
-						responseTime: now,
-						durationMs: now - requestInfo.timestamp,
-					});
+			page.on(
+				"response",
+				bindAsyncContext(async (response) => {
+					try {
+						const request = response.request();
+						if (request.method() !== "GET") return;
 
-					// Cleanup map to prevent memory leaks
-					requestStartTimeMap.delete(requestId);
+						// Try to get requestId
+						// Note: Not all requests accept headers (e.g. redirects). Skip if ID is missing.
+						const headers = request.headers();
+						const requestId = headers[this.requestHeader];
 
-				} catch (err) {
-					this.log.warn(`Response processing failed: ${err}`);
-				}
-			}));
+						// If ID is missing in headers, skip.
+						if (!requestId) return;
+
+						const requestInfo = requestStartTimeMap.get(requestId);
+						if (!requestInfo) return;
+
+						const status = response.status();
+						// Only record successful requests (2xx)
+						if (status < 200 || status >= 300) return;
+
+						let resourceSizeKB = 0;
+						try {
+							const buffer = await response.buffer();
+							resourceSizeKB = buffer.length / 1024;
+						} catch (e) {
+							// Ignored: Buffer access might fail for various reasons (CORS, etc.)
+						}
+
+						const now = Date.now();
+						capturedResources.push({
+							url: response.url(),
+							status: status,
+							type: request.resourceType(),
+							sizeKB: resourceSizeKB,
+							requestTime: requestInfo.timestamp,
+							responseTime: now,
+							durationMs: now - requestInfo.timestamp,
+						});
+
+						// Cleanup map to prevent memory leaks
+						requestStartTimeMap.delete(requestId);
+					} catch (err) {
+						this.log.warn(`Response processing failed: ${err}`);
+					}
+				}),
+			);
 
 			// networkidle2: consider navigation finished when there are no more than 2 network connections for at least 500ms
 			await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });

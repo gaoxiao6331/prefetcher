@@ -6,31 +6,28 @@ import releasePort from "./release-port";
 
 const program = new Command();
 
-program
-  .name("tools")
-  .description("help use prefetcher")
-  .version(version);
+program.name("tools").description("help use prefetcher").version(version);
 
 program
-  .command("gen-keys")
-  .description("generate rsa keys for encryption")
-  .action(() => {
-    genKeys();
-  });
+	.command("gen-keys")
+	.description("generate rsa keys for encryption")
+	.action(() => {
+		genKeys();
+	});
 
 program
-  .command("decrypt")
-  .description("decrypt data using rsa private key")
-  .requiredOption("-d, --data <data>", "encrypted data to decrypt")
-  .requiredOption("-k, --key <key>", "rsa private key for decryption")
-  .action((opts) => {
-    decrypt(opts);
-  });
+	.command("decrypt")
+	.description("decrypt data using rsa private key")
+	.requiredOption("-d, --data <data>", "encrypted data to decrypt")
+	.requiredOption("-k, --key <key>", "rsa private key for decryption")
+	.action((opts) => {
+		decrypt(opts);
+	});
 
 program
-  .command("release-port")
-  .description("release port")
-  .argument("<port>", "port to release")
-  .action((port) => {
-    releasePort(port);
-  });
+	.command("release-port")
+	.description("release port")
+	.argument("<port>", "port to release")
+	.action((port) => {
+		releasePort(port);
+	});

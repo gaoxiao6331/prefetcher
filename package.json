@@ -10,7 +10,6 @@
         "tool": "ts-node -r tsconfig-paths/register --files ./src/index.ts start",
         "run:prod": "pnpm build && cross-env NODE_ENV=prod pnpm start",
         "clean": "rm -rf dist",
-        "format": "biome format --write .",
         "fix": "biome check --fix .",
         "test": "cross-env NODE_ENV=development jest --verbose"
     },

@@ -1,15 +1,14 @@
 import cdnUpdaterModule from "@/modules/cdn-updater";
-import resourceGeneratorModule from "@/modules/resource-generator";
 import notifierModule from "@/modules/notifier";
+import resourceGeneratorModule from "@/modules/resource-generator";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 import { isDebugMode } from "./utils/is";
 
 export interface StartParams {
-	debug?: boolean
+	debug?: boolean;
 }
 
 export const start = async (params: StartParams) => {
-
 	globalThis.startParams = params;
 
 	const fastify = await createFastifyInstance();
@@ -44,7 +43,7 @@ export const start = async (params: StartParams) => {
 
 	process.on("unhandledRejection", (reason, promise) => {
 		fastify.log.error(reason, "Unhandled Rejection occurred");
-		if(!startParams.debug) {
+		if (!startParams.debug) {
 			fastify.alert(`Unhandled Rejection occurred: ${reason}`);
 		}
 	});
@@ -52,7 +51,7 @@ export const start = async (params: StartParams) => {
 	// 捕获未处理的异常
 	process.on("uncaughtException", (error) => {
 		fastify.log.error(error, "Uncaught Exception occurred");
-		if(!isDebugMode()) {
+		if (!isDebugMode()) {
 			fastify.alert(`Uncaught Exception occurred: ${error}`);
 		}
 	});

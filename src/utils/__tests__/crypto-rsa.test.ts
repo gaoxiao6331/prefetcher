@@ -1,18 +1,18 @@
 import CryptoRsaUtil from "../crypto-rsa";
 
 describe("crypto-rsa", () => {
-  test("should encrypt and decrypt data correctly using auto-generated keys", () => {
-    const data = "Hello, Prefetcher!";
-    const cryptoRsaUtil = new CryptoRsaUtil();
-    const encryptedData = cryptoRsaUtil.encrypt(data);
-    expect(encryptedData).not.toBe(data);
-    const decryptedData = cryptoRsaUtil.decrypt(encryptedData);
-    expect(decryptedData).toBe(data);
-  });
+	test("should encrypt and decrypt data correctly using auto-generated keys", () => {
+		const data = "Hello, Prefetcher!";
+		const cryptoRsaUtil = new CryptoRsaUtil();
+		const encryptedData = cryptoRsaUtil.encrypt(data);
+		expect(encryptedData).not.toBe(data);
+		const decryptedData = cryptoRsaUtil.decrypt(encryptedData);
+		expect(decryptedData).toBe(data);
+	});
 
-  test("should encrypt and decrypt data correctly using specified keys", () => {
-    const data = "Hello, Prefetcher!";
-    const publicKey = `
+	test("should encrypt and decrypt data correctly using specified keys", () => {
+		const data = "Hello, Prefetcher!";
+		const publicKey = `
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA8A7Z7Zhp36GlFIdfmzjy
 /8XOk2+W2q9sGnVxXe2s1/HHEPe4WEmdrzHHpT3b3wR+cdJYxKNbv7FucIepq8aD
@@ -23,7 +23,7 @@ GBwjF/UOMwJZR3gnELpctQT/yagVn476/JliONEn9d3wwRpw3TuT1W+WB22QMNN6
 8QIDAQAB
 -----END PUBLIC KEY-----
         `.trim();
-    const privateKey = `
+		const privateKey = `
 -----BEGIN ENCRYPTED PRIVATE KEY-----
 MIIFLTBXBgkqhkiG9w0BBQ0wSjApBgkqhkiG9w0BBQwwHAQIWiehxDTqtJMCAggA
 MAwGCCqGSIb3DQIJBQAwHQYJYIZIAWUDBAEqBBC/bUCIQ9OxVa5gVf2qiOVoBIIE
@@ -55,9 +55,9 @@ jmzfo7nJX61srVEljJ5sfscEhuPk9YGRwKIJ9CGZWyt7rznTTfmwPBYCTTVdOwcP
 1EkFb2ovVCyi0OzL+NK3cP5KlaW1mGHPasKYw0ignvKE
 -----END ENCRYPTED PRIVATE KEY-----
         `.trim();
-    const encryptedData = CryptoRsaUtil.encrypt(data, publicKey);
-    expect(encryptedData).not.toBe(data);
-    const decryptedData = CryptoRsaUtil.decrypt(encryptedData, privateKey);
-    expect(decryptedData).toBe(data);
-  });
+		const encryptedData = CryptoRsaUtil.encrypt(data, publicKey);
+		expect(encryptedData).not.toBe(data);
+		const decryptedData = CryptoRsaUtil.decrypt(encryptedData, privateKey);
+		expect(decryptedData).toBe(data);
+	});
 });

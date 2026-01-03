@@ -9,5 +9,5 @@ export interface CapturedResource {
 }
 
 export interface ResourceGeneratorService {
-    captureResources(url: string): Promise<string[]>;
+	captureResources(url: string): Promise<string[]>;
 }
