@@ -13,6 +13,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { traceStorage } from './trace-context';
 import { isDebugMode } from "./is";
+import pino from 'pino';
 
 const TRACE_ID_HEADER = "x-trace-id";
 
@@ -47,21 +48,8 @@ declare module "fastify" {
 
 export default async function createFastifyInstance() {
 
-  // 1. 定义日志路径
-  const logDir = process.env.LOG_DIR || './logs';
-  const logFile = path.join(logDir, 'app.log');
-  const logToFile = process.env.LOG_TO_FILE !== 'false';
 
-  // 2. 异步检查并创建目录 (只有当需要写文件日志时)
-  if (logToFile) {
-    try {
-      await fs.promises.access(logDir);
-    } catch {
-      await fs.promises.mkdir(logDir, { recursive: true });
-    }
-  }
-
-  const logTargets: any[] = [
+  const logTargets: pino.TransportTargetOptions[] = [
     {
       target: 'pino-pretty',
       options: {
@@ -72,16 +60,27 @@ export default async function createFastifyInstance() {
     }
   ];
 
-  if (logToFile) {
-    logTargets.push({
-      target: 'pino/file',
-      options: { destination: logFile }
-    });
-  }
+  logTargets.push({
+    target: 'pino-roll',
+    options: {
+      // 日志文件保存路径
+      file: path.join('logs', 'app.log'),
+      // 轮转频率: 'daily', 'hourly', 毫秒值
+      frequency: 'daily',
+      // 或者按大小轮转 (例如 10MB)
+      // size: '1m',
+      mkdir: true,
+      // 最多保留多少个日志文件
+      limit: {
+        count: 100
+      }
+    }
+  });
 
   // 3. 初始化 Fastify
   const fastify = Fastify({
     logger: {
+      level: isDebugMode() ? 'debug' : 'info',
       transport: {
         targets: logTargets
       },
