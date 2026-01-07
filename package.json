@@ -5,10 +5,11 @@
     "main": "dist/index.js",
     "scripts": {
         "dev": "cross-env NODE_ENV=dev nodemon",
+        "dev:debug": "cross-env NODE_ENV=dev nodemon --exec 'ts-node -r tsconfig-paths/register --files ./src/index.ts start -d'",
         "build": "tsc -p tsconfig.build.json && tsc-alias",
         "start": "node dist/index.js start",
-        "tool": "ts-node -r tsconfig-paths/register --files ./src/index.ts start",
-        "run:prod": "pnpm build && cross-env NODE_ENV=prod pnpm start",
+        "tool": "ts-node -r tsconfig-paths/register --files ./src/tools/index.ts",
+        "run": "pnpm build && cross-env NODE_ENV=prod pnpm start",
         "clean": "rm -rf dist",
         "fix": "biome check --fix .",
         "test": "cross-env NODE_ENV=development jest --verbose"

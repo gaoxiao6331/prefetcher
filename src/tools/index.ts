@@ -31,3 +31,5 @@ program
 	.action((port) => {
 		releasePort(port);
 	});
+
+program.parse();
