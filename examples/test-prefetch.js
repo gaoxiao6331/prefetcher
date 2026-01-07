@@ -7,7 +7,7 @@
 
 const puppeteer = require('puppeteer');
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = 'http://localhost:3001';
 const TEST_ROUNDS = parseInt(process.argv[2]) || 5; // 默认每种模式测试5次
 
 async function sleep(ms) {
@@ -23,12 +23,29 @@ async function getPerformanceMetrics(page) {
         // 获取 LCP
         return new Promise(resolve => {
             let lcp = null;
+
+            // 尝试通过已有的 entries 获取
+            const existingLCP = performance.getEntriesByType('largest-contentful-paint');
+            if (existingLCP.length > 0) {
+                lcp = existingLCP[existingLCP.length - 1].startTime;
+            }
+
+            // 同时开启监听（使用 buffered: true 获取之前的事件）
             const observer = new PerformanceObserver((list) => {
                 const entries = list.getEntries();
-                lcp = entries[entries.length - 1]?.startTime;
+                if (entries.length > 0) {
+                    lcp = entries[entries.length - 1].startTime;
+                }
             });
-            observer.observe({ entryTypes: ['largest-contentful-paint'] });
 
+            try {
+                observer.observe({ type: 'largest-contentful-paint', buffered: true });
+            } catch (e) {
+                // 如果不支持 type 参数，回退到 entryTypes
+                observer.observe({ entryTypes: ['largest-contentful-paint'] });
+            }
+
+            // 200ms 后返回结果，因为 buffered 模式通常很快就能拿到值
             setTimeout(() => {
                 observer.disconnect();
                 resolve({
@@ -37,7 +54,7 @@ async function getPerformanceMetrics(page) {
                     lcp: lcp,
                     loadTime: nav ? nav.loadEventEnd - nav.fetchStart : null
                 });
-            }, 2000);
+            }, 200);
         });
     });
 }
@@ -46,13 +63,13 @@ async function runTest(browser, withPrefetch) {
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
 
-    // 禁用缓存
-    await page.setCacheEnabled(false);
+    // 必须启用缓存，否则 prefetch 无法在后续加载中重用资源
+    await page.setCacheEnabled(true);
 
     try {
         // 1. 访问 Site A
         const siteAUrl = withPrefetch
-            ? `${BASE_URL}/a/?prefetch=/prefetch-list.js`
+            ? `${BASE_URL}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@ex/ex-res3.js`
             : `${BASE_URL}/a/`;
 
         await page.goto(siteAUrl, { waitUntil: 'networkidle0' });

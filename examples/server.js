@@ -7,7 +7,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 3000;
+const PORT = 3001;
 
 const MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -45,11 +45,11 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // 模拟网络延迟（Site B 的 CSS 和 JS 文件添加延迟）
+    // 模拟网络延迟（Site B 的 CSS 和 JS 文件添加固定延迟）
     if (url.startsWith('/b/') && (ext === '.css' || ext === '.js')) {
-        const delay = randomDelay(100, 50);
+        const delay = 200; // 固定延迟 200ms
         await new Promise(resolve => setTimeout(resolve, delay));
-        console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} (delay: ${delay.toFixed(0)}ms)`);
+        console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} (fixed delay: ${delay}ms)`);
     } else {
         console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     }
@@ -59,11 +59,21 @@ const server = http.createServer(async (req, res) => {
         const content = fs.readFileSync(filePath);
         const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-        res.writeHead(200, {
-            'Content-Type': contentType,
-            'Cache-Control': 'no-cache',
-            'Access-Control-Allow-Origin': '*'
-        });
+        // 如果是 Site B 的资源文件（JS/CSS），设置较长时间的缓存
+        // 这样 prefetch 到缓存后，后续访问 Site B 时才能命中缓存
+        if (url.startsWith('/b/') && (ext === '.css' || ext === '.js')) {
+            res.writeHead(200, {
+                'Content-Type': contentType,
+                'Cache-Control': 'public, max-age=3600', // 缓存 1 小时
+                'Access-Control-Allow-Origin': '*'
+            });
+        } else {
+            res.writeHead(200, {
+                'Content-Type': contentType,
+                'Cache-Control': 'no-cache', // HTML 和其他文件不缓存
+                'Access-Control-Allow-Origin': '*'
+            });
+        }
         res.end(content);
     } catch (err) {
         res.writeHead(500, { 'Content-Type': 'text/plain' });
@@ -80,7 +90,7 @@ server.listen(PORT, () => {
 ║    http://localhost:${PORT}/a/                               ║
 ║                                                            ║
 ║  Site A (启用 Prefetch):                                   ║
-║    http://localhost:${PORT}/a/?prefetch=/prefetch-list.js    ║
+║    http://localhost:${PORT}/a/?prefetch=/https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@ex/ex-res3.js    ║
 ║                                                            ║
 ║  Site B:                                                   ║
 ║    http://localhost:${PORT}/b/                               ║

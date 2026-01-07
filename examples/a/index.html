@@ -263,7 +263,8 @@
             <div class="prefetch-status" id="prefetchStatus"></div>
 
             <div class="btn-group">
-                <a href="/a/?prefetch=/prefetch-list.js" class="btn btn-primary" id="enablePrefetchBtn">
+                <a href="/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@ex/ex-res3.js"
+                    class="btn btn-primary" id="enablePrefetchBtn">
                     ✅ 启用 Prefetch 模式
                 </a>
                 <a href="/a/" class="btn btn-secondary" id="disablePrefetchBtn">
@@ -343,7 +344,7 @@
             statusEl.innerHTML = `✅ Prefetch 已启用 - 正在加载 <code>${prefetchParam}</code>`;
         } else {
             statusEl.className = 'prefetch-status disabled';
-            statusEl.innerHTML = '❌ Prefetch 未启用 - 添加 <code>?prefetch=/prefetch-list.js</code> 参数启用';
+            statusEl.innerHTML = '❌ Prefetch 未启用 - 添加 <code>?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@ex/ex-res3.js</code> 参数启用';
         }
 
         // 记录导航模式
