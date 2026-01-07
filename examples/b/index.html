@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site B - 复杂页面</title>
+
+    <!-- 外部 CSS 文件 -->
+    <link rel="stylesheet" href="/b/css/base.css">
+    <link rel="stylesheet" href="/b/css/components.css">
+    <link rel="stylesheet" href="/b/css/animations.css">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">🎯 Site B</div>
+        <div class="nav-links">
+            <a href="#dashboard">Dashboard</a>
+            <a href="#analytics">Analytics</a>
+            <a href="#settings">Settings</a>
+        </div>
+        <a href="/a/" class="back-btn">← 返回 Site A</a>
+    </nav>
+
+    <main class="main-content">
+        <section class="hero">
+            <h1>欢迎来到 Site B</h1>
+            <p class="hero-subtitle">这是一个复杂的页面，包含多个 JS/CSS 文件和模拟的 API 请求</p>
+            <div class="hero-stats" id="heroStats">
+                <div class="stat-item">
+                    <span class="stat-value" id="statUsers">--</span>
+                    <span class="stat-label">活跃用户</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="statOrders">--</span>
+                    <span class="stat-label">今日订单</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="statRevenue">--</span>
+                    <span class="stat-label">收入</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="dashboard">
+            <div class="card card-chart">
+                <h3>📈 数据图表</h3>
+                <div class="chart-placeholder" id="chartContainer">
+                    <div class="loading-spinner"></div>
+                    <span>加载图表模块...</span>
+                </div>
+            </div>
+
+            <div class="card card-table">
+                <h3>📋 数据列表</h3>
+                <div class="table-placeholder" id="tableContainer">
+                    <div class="loading-spinner"></div>
+                    <span>加载表格模块...</span>
+                </div>
+            </div>
+
+            <div class="card card-notifications">
+                <h3>🔔 通知中心</h3>
+                <div class="notifications-placeholder" id="notificationsContainer">
+                    <div class="loading-spinner"></div>
+                    <span>加载通知模块...</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="performance-panel">
+            <h2>⚡ 页面性能指标</h2>
+            <div class="perf-grid" id="perfGrid">
+                <div class="perf-item">
+                    <span class="perf-label">TTFB</span>
+                    <span class="perf-value" id="perfTTFB">计算中...</span>
+                </div>
+                <div class="perf-item">
+                    <span class="perf-label">FCP</span>
+                    <span class="perf-value" id="perfFCP">计算中...</span>
+                </div>
+                <div class="perf-item">
+                    <span class="perf-label">LCP</span>
+                    <span class="perf-value" id="perfLCP">计算中...</span>
+                </div>
+                <div class="perf-item">
+                    <span class="perf-label">FID</span>
+                    <span class="perf-value" id="perfFID">计算中...</span>
+                </div>
+                <div class="perf-item">
+                    <span class="perf-label">CLS</span>
+                    <span class="perf-value" id="perfCLS">计算中...</span>
+                </div>
+                <div class="perf-item">
+                    <span class="perf-label">总加载时间</span>
+                    <span class="perf-value" id="perfLoad">计算中...</span>
+                </div>
+            </div>
+            <button class="save-btn" id="saveMetricsBtn">💾 保存到 Site A</button>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>Site B - Prefetch 性能测试页面</p>
+    </footer>
+
+    <!-- 同步加载的核心脚本 -->
+    <script src="/b/js/vendor.js"></script>
+    <script src="/b/js/utils.js"></script>
+    <script src="/b/js/main.js"></script>
+
+    <!-- 性能指标收集 -->
+    <script>
+        // 性能指标收集
+        const perfMetrics = {
+            ttfb: null,
+            fcp: null,
+            lcp: null,
+            fid: null,
+            cls: null,
+            loadTime: null
+        };
+
+        // 获取导航时间
+        function getNavigationTiming() {
+            const [entry] = performance.getEntriesByType('navigation');
+            if (entry) {
+                perfMetrics.ttfb = entry.responseStart - entry.requestStart;
+                perfMetrics.loadTime = entry.loadEventEnd - entry.fetchStart;
+                updatePerfDisplay();
+            }
+        }
+
+        // FCP 观察
+        const fcpObserver = new PerformanceObserver((entryList) => {
+            const entries = entryList.getEntries();
+            const fcp = entries.find(e => e.name === 'first-contentful-paint');
+            if (fcp) {
+                perfMetrics.fcp = fcp.startTime;
+                updatePerfDisplay();
+            }
+        });
+        fcpObserver.observe({ entryTypes: ['paint'] });
+
+        // LCP 观察
+        const lcpObserver = new PerformanceObserver((entryList) => {
+            const entries = entryList.getEntries();
+            const lastEntry = entries[entries.length - 1];
+            perfMetrics.lcp = lastEntry.startTime;
+            updatePerfDisplay();
+        });
+        lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
+
+        // FID 观察
+        const fidObserver = new PerformanceObserver((entryList) => {
+            const entries = entryList.getEntries();
+            if (entries.length > 0) {
+                perfMetrics.fid = entries[0].processingStart - entries[0].startTime;
+                updatePerfDisplay();
+            }
+        });
+        fidObserver.observe({ entryTypes: ['first-input'] });
+
+        // CLS 观察
+        let clsValue = 0;
+        const clsObserver = new PerformanceObserver((entryList) => {
+            for (const entry of entryList.getEntries()) {
+                if (!entry.hadRecentInput) {
+                    clsValue += entry.value;
+                }
+            }
+            perfMetrics.cls = clsValue;
+            updatePerfDisplay();
+        });
+        clsObserver.observe({ entryTypes: ['layout-shift'] });
+
+        // 更新显示
+        function updatePerfDisplay() {
+            document.getElementById('perfTTFB').textContent =
+                perfMetrics.ttfb !== null ? `${perfMetrics.ttfb.toFixed(0)} ms` : '计算中...';
+            document.getElementById('perfFCP').textContent =
+                perfMetrics.fcp !== null ? `${perfMetrics.fcp.toFixed(0)} ms` : '计算中...';
+            document.getElementById('perfLCP').textContent =
+                perfMetrics.lcp !== null ? `${perfMetrics.lcp.toFixed(0)} ms` : '计算中...';
+            document.getElementById('perfFID').textContent =
+                perfMetrics.fid !== null ? `${perfMetrics.fid.toFixed(0)} ms` : '等待交互...';
+            document.getElementById('perfCLS').textContent =
+                perfMetrics.cls !== null ? perfMetrics.cls.toFixed(3) : '计算中...';
+            document.getElementById('perfLoad').textContent =
+                perfMetrics.loadTime !== null ? `${perfMetrics.loadTime.toFixed(0)} ms` : '计算中...';
+        }
+
+        // 页面加载完成后获取指
+        window.addEventListener('load', () => {
+            setTimeout(getNavigationTiming, 0);
+        });
+
+        // 保存指标到 Site A
+        document.getElementById('saveMetricsBtn').addEventListener('click', () => {
+            const mode = sessionStorage.getItem('navigationMode') || 'normal';
+            const history = JSON.parse(localStorage.getItem('performanceHistory') || '[]');
+
+            history.unshift({
+                timestamp: Date.now(),
+                mode: mode,
+                ...perfMetrics
+            });
+
+            // 只保留最近 20 条
+            if (history.length > 20) {
+                history.pop();
+            }
+
+            localStorage.setItem('performanceHistory', JSON.stringify(history));
+
+            alert('✅ 性能指标已保存！返回 Site A 查看对比数据');
+        });
+
+        // 自动保存（首次加载后 5 秒）
+        setTimeout(() => {
+            const mode = sessionStorage.getItem('navigationMode') || 'normal';
+            const history = JSON.parse(localStorage.getItem('performanceHistory') || '[]');
+
+            history.unshift({
+                timestamp: Date.now(),
+                mode: mode,
+                ...perfMetrics
+            });
+
+            if (history.length > 20) {
+                history.pop();
+            }
+
+            localStorage.setItem('performanceHistory', JSON.stringify(history));
+            console.log('📊 性能指标已自动保存');
+        }, 5000);
+    </script>
+</body>
+
+</html>

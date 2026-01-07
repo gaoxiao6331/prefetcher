@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site A - Prefetch 测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #8892b0;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+
+        .control-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-panel h2 {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            color: #ccd6f6;
+        }
+
+        .prefetch-status {
+            padding: 12px 20px;
+            background: rgba(0, 217, 255, 0.1);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .prefetch-status.enabled {
+            color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .prefetch-status.disabled {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00d9ff, #00ff88);
+            color: #1a1a2e;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 217, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .url-info {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #8892b0;
+            margin-bottom: 20px;
+            word-break: break-all;
+        }
+
+        .url-info strong {
+            color: #00d9ff;
+        }
+
+        .metrics-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .metrics-panel h2 {
+            font-size: 1.3rem;
+            margin-bottom: 24px;
+            color: #ccd6f6;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .metric-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .metric-card .label {
+            font-size: 0.85rem;
+            color: #8892b0;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .metric-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #00ff88;
+        }
+
+        .metric-card .unit {
+            font-size: 0.9rem;
+            color: #8892b0;
+        }
+
+        .history-table {
+            width: 100%;
+            margin-top: 30px;
+            border-collapse: collapse;
+        }
+
+        .history-table th,
+        .history-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .history-table th {
+            color: #8892b0;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .history-table td {
+            color: #ccd6f6;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .tag-prefetch {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+        }
+
+        .tag-normal {
+            background: rgba(255, 170, 0, 0.2);
+            color: #ffaa00;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #8892b0;
+        }
+
+        .prefetch-list {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.85rem;
+        }
+
+        .prefetch-list ul {
+            list-style: none;
+        }
+
+        .prefetch-list li {
+            padding: 5px 0;
+            color: #8892b0;
+            font-family: monospace;
+        }
+
+        .prefetch-list li::before {
+            content: '✓ ';
+            color: #00ff88;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🚀 Site A - Prefetch 性能测试</h1>
+        <p class="subtitle">通过 URL 参数控制 prefetch 能力，验证资源预加载对性能的影响</p>
+
+        <div class="control-panel">
+            <h2>⚙️ 控制面板</h2>
+
+            <div class="url-info">
+                当前URL: <strong id="currentUrl"></strong>
+            </div>
+
+            <div class="prefetch-status" id="prefetchStatus"></div>
+
+            <div class="btn-group">
+                <a href="/a/?prefetch=/prefetch-list.js" class="btn btn-primary" id="enablePrefetchBtn">
+                    ✅ 启用 Prefetch 模式
+                </a>
+                <a href="/a/" class="btn btn-secondary" id="disablePrefetchBtn">
+                    ❌ 禁用 Prefetch 模式
+                </a>
+            </div>
+
+            <div class="btn-group">
+                <a href="/b/" class="btn btn-primary" id="navigateBtn">
+                    🔗 访问 Site B
+                </a>
+                <button class="btn btn-secondary" id="clearHistoryBtn">
+                    📊 清除历史记录
+                </button>
+            </div>
+
+            <div class="prefetch-list" id="prefetchListContainer" style="display: none;">
+                <strong>📦 已预加载的资源:</strong>
+                <ul id="prefetchListDisplay"></ul>
+            </div>
+        </div>
+
+        <div class="metrics-panel">
+            <h2>📊 性能指标对比</h2>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="label">Prefetch 平均 LCP</div>
+                    <div class="value" id="prefetchAvgLCP">--</div>
+                    <div class="unit">ms</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">普通模式平均 LCP</div>
+                    <div class="value" id="normalAvgLCP">--</div>
+                    <div class="unit">ms</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">性能提升</div>
+                    <div class="value" id="improvement">--</div>
+                    <div class="unit">%</div>
+                </div>
+            </div>
+
+            <table class="history-table" id="historyTable">
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>模式</th>
+                        <th>TTFB</th>
+                        <th>FCP</th>
+                        <th>LCP</th>
+                        <th>加载时间</th>
+                    </tr>
+                </thead>
+                <tbody id="historyBody">
+                    <tr>
+                        <td colspan="6" class="empty-state">暂无数据，请访问 Site B 后返回查看</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // 显示当前 URL
+        document.getElementById('currentUrl').textContent = location.href;
+
+        // 解析 URL 参数
+        const urlParams = new URLSearchParams(location.search);
+        const prefetchParam = urlParams.get('prefetch');
+        const isPrefetchEnabled = !!prefetchParam;
+
+        // 更新状态显示
+        const statusEl = document.getElementById('prefetchStatus');
+        if (isPrefetchEnabled) {
+            statusEl.className = 'prefetch-status enabled';
+            statusEl.innerHTML = `✅ Prefetch 已启用 - 正在加载 <code>${prefetchParam}</code>`;
+        } else {
+            statusEl.className = 'prefetch-status disabled';
+            statusEl.innerHTML = '❌ Prefetch 未启用 - 添加 <code>?prefetch=/prefetch-list.js</code> 参数启用';
+        }
+
+        // 记录导航模式
+        document.getElementById('navigateBtn').addEventListener('click', () => {
+            sessionStorage.setItem('navigationMode', isPrefetchEnabled ? 'prefetch' : 'normal');
+            sessionStorage.setItem('navigationTime', Date.now());
+        });
+
+        // 如果有 prefetch 参数，加载 prefetch_list 文件
+        if (isPrefetchEnabled) {
+            const script = document.createElement('script');
+            script.src = prefetchParam;
+            script.onload = () => {
+                console.log('[Site A] prefetch_list 已加载:', window.prefetch_list);
+
+                // 显示预加载列表
+                if (window.prefetch_list && window.prefetch_list.length > 0) {
+                    const container = document.getElementById('prefetchListContainer');
+                    const listEl = document.getElementById('prefetchListDisplay');
+                    container.style.display = 'block';
+                    listEl.innerHTML = window.prefetch_list.map(url => `<li>${url}</li>`).join('');
+
+                    // 加载 prefetch.js 执行预加载
+                    const prefetchScript = document.createElement('script');
+                    prefetchScript.src = '/prefetch.js';
+                    prefetchScript.onload = () => {
+                        console.log('[Site A] prefetch.js 已执行，资源预加载完成');
+                    };
+                    document.head.appendChild(prefetchScript);
+                }
+            };
+            script.onerror = () => {
+                console.error('[Site A] 加载 prefetch_list 失败:', prefetchParam);
+                statusEl.className = 'prefetch-status disabled';
+                statusEl.innerHTML = `❌ 加载失败: ${prefetchParam}`;
+            };
+            document.head.appendChild(script);
+        }
+
+        // 清除历史记录
+        document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+            localStorage.removeItem('performanceHistory');
+            renderHistory();
+        });
+
+        // 渲染历史记录
+        function renderHistory() {
+            const history = JSON.parse(localStorage.getItem('performanceHistory') || '[]');
+            const tbody = document.getElementById('historyBody');
+
+            if (history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无数据，请访问 Site B 后返回查看</td></tr>';
+                document.getElementById('prefetchAvgLCP').textContent = '--';
+                document.getElementById('normalAvgLCP').textContent = '--';
+                document.getElementById('improvement').textContent = '--';
+                return;
+            }
+
+            tbody.innerHTML = history.map(item => `
+                <tr>
+                    <td>${new Date(item.timestamp).toLocaleTimeString()}</td>
+                    <td>
+                        <span class="tag ${item.mode === 'prefetch' ? 'tag-prefetch' : 'tag-normal'}">
+                            ${item.mode === 'prefetch' ? 'Prefetch' : '普通'}
+                        </span>
+                    </td>
+                    <td>${item.ttfb?.toFixed(0) || '--'} ms</td>
+                    <td>${item.fcp?.toFixed(0) || '--'} ms</td>
+                    <td>${item.lcp?.toFixed(0) || '--'} ms</td>
+                    <td>${item.loadTime?.toFixed(0) || '--'} ms</td>
+                </tr>
+            `).join('');
+
+            // 计算平均值和性能提升
+            const prefetchItems = history.filter(h => h.mode === 'prefetch' && h.lcp);
+            const normalItems = history.filter(h => h.mode === 'normal' && h.lcp);
+
+            const prefetchAvg = prefetchItems.length
+                ? prefetchItems.reduce((a, b) => a + b.lcp, 0) / prefetchItems.length
+                : null;
+            const normalAvg = normalItems.length
+                ? normalItems.reduce((a, b) => a + b.lcp, 0) / normalItems.length
+                : null;
+
+            document.getElementById('prefetchAvgLCP').textContent = prefetchAvg ? prefetchAvg.toFixed(0) : '--';
+            document.getElementById('normalAvgLCP').textContent = normalAvg ? normalAvg.toFixed(0) : '--';
+
+            if (prefetchAvg && normalAvg) {
+                const improvement = ((normalAvg - prefetchAvg) / normalAvg * 100).toFixed(1);
+                const improvementEl = document.getElementById('improvement');
+                improvementEl.textContent = improvement > 0 ? `+${improvement}` : improvement;
+                improvementEl.style.color = improvement > 0 ? '#00ff88' : '#ff6b6b';
+            }
+        }
+
+        renderHistory();
+    </script>
+</body>
+
+</html>
