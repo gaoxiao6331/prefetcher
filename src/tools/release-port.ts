@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import chalk from "chalk";
 
 const releasePort = (port: string) => {
@@ -9,8 +10,20 @@ const releasePort = (port: string) => {
 		return;
 	}
 
-	const command = `lsof -i :${port} | grep -v PID | awk '{print $2}' | xargs kill -9`;
-	console.log(chalk.green(`${command}`));
+	try {
+		// 使用 lsof -ti 直接获取 PID，如果没有进程会抛出异常
+		const pids = execSync(`lsof -ti :${portNum}`).toString().trim();
+		if (pids) {
+			console.log(chalk.yellow(`Found processes on port ${portNum}: ${pids.replace(/\n/g, ", ")}`));
+			execSync(`kill -9 ${pids.split("\n").join(" ")}`);
+			console.log(chalk.green(`Successfully killed processes on port ${portNum}.`));
+		} else {
+			console.log(chalk.blue(`No process found on port ${portNum}.`));
+		}
+	} catch (error) {
+		// lsof 在找不到进程时会返回非 0 状态码
+		console.log(chalk.blue(`No process found on port ${portNum} or already released.`));
+	}
 };
 
 export default releasePort;

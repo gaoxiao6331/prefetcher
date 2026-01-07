@@ -29,7 +29,7 @@ abstract class BaseService implements ResourceGeneratorService {
 		) => BaseService,
 		fastify: FastifyInstance,
 	) {
-		const service = new BaseService(fastify);
+		const service = new this(fastify);
 		await service.initBrowser();
 		return service;
 	}
