@@ -15,7 +15,7 @@ program
 	.description("start the prefetcher server")
 	.option("-d, --debug", "enable debug mode", false)
 	.action((opts) => {
-		console.log(chalk.bgRed(JSON.stringify(opts)))
+		console.log(chalk.bgRed(JSON.stringify(opts)));
 		if (opts.debug) {
 			console.log(chalk.green("Debug mode is on"));
 		}

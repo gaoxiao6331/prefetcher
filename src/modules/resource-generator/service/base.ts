@@ -14,7 +14,7 @@ abstract class BaseService implements ResourceGeneratorService {
 	// Limit concurrent pages to 5 to avoid crashing the server
 	private readonly semaphore = new Semaphore(5);
 
-	constructor(private readonly fastify: FastifyInstance) { }
+	constructor(private readonly fastify: FastifyInstance) {}
 
 	/**
 	 * 获取 logger，优先使用带 traceId 的 logger
@@ -29,7 +29,7 @@ abstract class BaseService implements ResourceGeneratorService {
 		) => BaseService,
 		fastify: FastifyInstance,
 	) {
-		const service = new this(fastify);
+		const service = new BaseService(fastify);
 		await service.initBrowser();
 		return service;
 	}

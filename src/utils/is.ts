@@ -1,3 +1,3 @@
 export const isDebugMode = () => {
-	return !!(globalThis?.startParams?.debug);
+	return !!globalThis?.startParams?.debug;
 };

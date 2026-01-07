@@ -2,7 +2,7 @@ import axios from "axios";
 import type { FastifyInstance } from "fastify";
 import CryptoRsaUtil from "@/utils/crypto-rsa";
 import { getLogger } from "@/utils/trace-context";
-import { NotifierService } from "./type";
+import type { NotifierService } from "./type";
 
 interface MessageConfig {
 	color: string;
