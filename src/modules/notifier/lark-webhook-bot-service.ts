@@ -1,6 +1,6 @@
 import axios from "axios";
 import type { FastifyInstance } from "fastify";
-import CryptoRsaUtil from "@/utils/crypto-rsa";
+
 import { getLogger } from "@/utils/trace-context";
 import type { NotifierService } from "./type";
 
@@ -14,12 +14,10 @@ type MessageType = "info" | "warn" | "error";
 
 // 使用这个服务前需要配置飞书webhook token
 class LarkWebhookBotService implements NotifierService {
-	private constructor(private fastify: FastifyInstance) {}
+	private constructor(private fastify: FastifyInstance) { }
 
 	static async create(fastify: FastifyInstance) {
-		if (!fastify.config.crypto?.publicKey) {
-			fastify.log.warn("Crypto config is missing");
-		}
+
 		return new LarkWebhookBotService(fastify);
 	}
 
@@ -132,19 +130,10 @@ class LarkWebhookBotService implements NotifierService {
 
 		const success = results.every((result) => result.status === "fulfilled");
 		if (!success) {
-			// 出现错误抛出异常，因为会包含token信息，log要加密
-			const key = this.fastify.config.crypto?.publicKey;
+			// 出现错误抛出异常
 			const tokenStr = JSON.stringify(tokens);
-			let logTokens = tokenStr;
+			const logTokens = tokenStr;
 
-			if (key) {
-				try {
-					logTokens = CryptoRsaUtil.encrypt(tokenStr, key);
-				} catch (e) {
-					this.log.error(e, "Failed to encrypt tokens for logging");
-					logTokens = "*** (Encryption Failed) ***";
-				}
-			}
 
 			const failedReasons = results
 				.filter((r) => r.status === "rejected")
@@ -153,7 +142,7 @@ class LarkWebhookBotService implements NotifierService {
 			throw new Error(
 				`Failed to send message(s) to Lark.
          Errors: ${JSON.stringify(failedReasons)}
-         Tokens (Encrypted): ${logTokens}
+         Tokens: ${logTokens}
         `,
 			);
 		}

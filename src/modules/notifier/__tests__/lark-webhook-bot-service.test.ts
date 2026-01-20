@@ -1,10 +1,10 @@
 import axios from "axios";
 import type { FastifyInstance } from "fastify";
-import CryptoRsaUtil from "@/utils/crypto-rsa";
+
 import LarkService from "../lark-webhook-bot-service";
 
 jest.mock("axios");
-jest.mock("@/utils/crypto-rsa");
+
 
 describe("LarkService", () => {
 	let fastifyMock: any;
@@ -19,11 +19,7 @@ describe("LarkService", () => {
 				warn: jest.fn(),
 				info: jest.fn(),
 			},
-			config: {
-				crypto: {
-					publicKey: "mock-public-key",
-				},
-			},
+
 		} as unknown as FastifyInstance;
 
 		larkService = await LarkService.create(fastifyMock);
@@ -36,8 +32,7 @@ describe("LarkService", () => {
 			status: 200,
 			data: { code: 0, msg: "success" },
 		});
-		// Mock crypto
-		(CryptoRsaUtil.encrypt as jest.Mock).mockReturnValue("encrypted-tokens");
+
 	});
 
 	test("should throw error if tokens list is empty", async () => {
@@ -90,7 +85,6 @@ describe("LarkService", () => {
 		// It should have tried multiple times (3 times default)
 		expect(axios.post).toHaveBeenCalledTimes(3);
 
-		// Should verify tokens were encrypted for logging
-		expect(CryptoRsaUtil.encrypt).toHaveBeenCalled();
+
 	}, 10000); // increase timeout
 });

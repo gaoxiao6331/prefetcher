@@ -12,8 +12,10 @@
         "resolveJsonModule": true,
         "baseUrl": "./",
         "paths": {
-          "@/*": ["src/*"]
-        } 
+            "@/*": [
+                "src/*"
+            ]
+        }
     },
     "ts-node": {
         "files": true
@@ -23,6 +25,6 @@
         "global.d.ts"
     ],
     "exclude": [
-        "node_modules",
+        "node_modules"
     ]
 }
