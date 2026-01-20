@@ -10,7 +10,4 @@ export interface Config {
 			};
 		};
 	};
-	crypto?: {
-		publicKey: string;
-	};
 }
