@@ -11,7 +11,7 @@
         "run": "pnpm build && cross-env NODE_ENV=prod pnpm start",
         "clean": "rm -rf dist",
         "fix": "biome check --fix .",
-        "test": "cross-env NODE_ENV=development jest --verbose"
+        "test": "cross-env NODE_ENV=development jest --verbose --coverage"
     },
     "keywords": [],
     "author": "",
