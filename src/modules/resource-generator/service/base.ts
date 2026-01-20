@@ -14,7 +14,7 @@ abstract class BaseService implements ResourceGeneratorService {
 	// Limit concurrent pages to 5 to avoid crashing the server
 	private readonly semaphore = new Semaphore(5);
 
-	constructor(private readonly fastify: FastifyInstance) {}
+	constructor(private readonly fastify: FastifyInstance) { }
 
 	/**
 	 * 获取 logger，优先使用带 traceId 的 logger
@@ -120,7 +120,7 @@ abstract class BaseService implements ResourceGeneratorService {
 			const page = pageObj.page;
 
 			// Enable request interception to inject tracking headers
-			await page.setRequestInterception(true);
+			// await page.setRequestInterception(true); // Already enabled in getPage()
 
 			// 使用 bindAsyncContext 绑定上下文，确保事件回调中 getLogger() 能正常工作
 			page.on(

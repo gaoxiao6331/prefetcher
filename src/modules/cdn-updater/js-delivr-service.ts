@@ -56,10 +56,12 @@ class JsDelivrService implements CdnUpdaterService {
 	}
 
 	parseRepoInfo(remoteAddr: string) {
-		// 解析github远程仓库的用户名和项目名 eg：git@github.com:gaoxiao6331/cdn-test.git
-		const match = remoteAddr.match(/git@github.com:([^/]+)\/([^/]+)\.git$/);
+		// Support both SSH and HTTPS github URLs
+		const cleanAddr = remoteAddr.replace(/\.git$/, "");
+		const match = cleanAddr.match(/github\.com[:/]([^/]+)\/([^/]+)$/);
+
 		if (!match) {
-			throw new Error("Invalid github remote address");
+			throw new Error(`Invalid github remote address: ${remoteAddr}`);
 		}
 		const [_, namespace, projectName] = match;
 		return { namespace, projectName };
@@ -83,6 +85,9 @@ class JsDelivrService implements CdnUpdaterService {
 		// Ensure git config is set for this repository
 		await this.configureGit(resolvedLocalPath);
 
+		// Fetch latest info from remote
+		await execPromise(`cd "${resolvedLocalPath}" && git fetch origin`);
+
 		// 检查本地是否存在branchName分支，不存在创建去远程拉取，远程不存在则创建
 		try {
 			// Check if branch exists locally
@@ -94,6 +99,14 @@ class JsDelivrService implements CdnUpdaterService {
 			await execPromise(
 				`cd "${resolvedLocalPath}" && git checkout "${branchName}"`,
 			);
+			// Pull latest changes
+			try {
+				await execPromise(
+					`cd "${resolvedLocalPath}" && git pull origin "${branchName}"`,
+				);
+			} catch (e) {
+				this.log.warn(`Failed to pull ${branchName}, might be new local branch or divergence`);
+			}
 		} catch (error) {
 			// Branch doesn't exist locally, check if it exists remotely
 			try {
@@ -133,7 +146,7 @@ class JsDelivrService implements CdnUpdaterService {
 		// Write the content to the file
 		fs.writeFileSync(resolvedFilePath, content);
 
-		// 5. 将content的内容写入文件，通过git 提交，内容为"update: {版本号}"
+		// 5. 将content的内容写入文件，通过git 提交
 		await this.gitAddCommitAndPush(
 			resolvedLocalPath,
 			resolvedFilePath,
@@ -195,11 +208,8 @@ class JsDelivrService implements CdnUpdaterService {
 		// Push to remote repository
 		await execPromise(`cd "${resolvedLocalPath}" && git push origin HEAD`);
 
-		// Create and push tag
-		await execPromise(`cd "${resolvedLocalPath}" && git tag "${versionTag}"`);
-		await execPromise(
-			`cd "${resolvedLocalPath}" && git push origin "${versionTag}"`,
-		);
+		// Note: Tagging every update creates too much noise and is removed.
+		// If version tracking is needed, consider a different strategy.
 	}
 
 	private async purgeJsDelivrCache(

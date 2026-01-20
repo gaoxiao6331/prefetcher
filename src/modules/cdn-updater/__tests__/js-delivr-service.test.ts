@@ -153,6 +153,17 @@ describe("JsDelivrService", () => {
 		});
 
 		test("should write file and commit push", async () => {
+			// Mock git status to return changes so it proceeds to commit
+			(exec as unknown as jest.Mock).mockImplementation(
+				(cmd: string, cb: any) => {
+					if (cmd.includes("status --porcelain")) {
+						cb(null, { stdout: "M test.js", stderr: "" });
+					} else {
+						cb(null, { stdout: "", stderr: "" });
+					}
+				},
+			);
+
 			await jsDelivrService.update("main", "test.js", "content");
 
 			expect(fs.writeFileSync).toHaveBeenCalled();
@@ -164,10 +175,10 @@ describe("JsDelivrService", () => {
 				expect.stringContaining("git push origin HEAD"),
 				expect.any(Function),
 			);
-			expect(exec).toHaveBeenCalledWith(
-				expect.stringContaining("git push origin"), // tag push
-				expect.any(Function),
-			);
+			// expect(exec).toHaveBeenCalledWith(
+			// 	expect.stringContaining("git push origin"), // tag push
+			// 	expect.any(Function),
+			// );
 		});
 
 		test("should skip commit if no changes", async () => {
