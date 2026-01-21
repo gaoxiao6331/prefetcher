@@ -153,7 +153,7 @@ class LarkWebhookBotService implements NotifierService {
 	}
 
 	async warn(message: string, tokens: string[]) {
-		await this.send(message, "info", tokens);
+		await this.send(message, "warn", tokens);
 	}
 
 	async error(message: string, tokens: string[]) {

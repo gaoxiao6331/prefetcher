@@ -87,4 +87,26 @@ describe("LarkService", () => {
 
 
 	}, 10000); // increase timeout
+
+	test("should throw error if Lark API returns non-zero code", async () => {
+		(axios.post as jest.Mock).mockResolvedValue({
+			status: 200,
+			data: { code: 1, msg: "Lark specific error" },
+		});
+
+		await expect(larkService.warn("test", ["token"])).rejects.toThrow(
+			"Lark specific error",
+		);
+	});
+
+	test("should throw default error if Lark API returns error without msg", async () => {
+		(axios.post as jest.Mock).mockResolvedValue({
+			status: 200,
+			data: { code: 111 }, // No msg
+		});
+
+		await expect(larkService.warn("test", ["token"])).rejects.toThrow(
+			"Lark API error: 111",
+		);
+	});
 });

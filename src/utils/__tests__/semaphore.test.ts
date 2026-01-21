@@ -79,4 +79,18 @@ describe("Semaphore", () => {
         await sm.acquire().then(() => { acquired = true; });
         expect(acquired).toBe(true);
     });
+
+    test("release should handle cases where tasks.shift() returns undefined", () => {
+        const sm = new Semaphore(1);
+        // Force an undefined into tasks list to hit the else/falsy branch of 'if (next)'
+        // although in normal usage it's always a function.
+        (sm as any).tasks.push(undefined);
+
+        // This should not throw and should simply consume the undefined
+        sm.release();
+
+        // After release, count should still be the same as if it was consumed
+        // because we inside 'if (tasks.length > 0)' branch.
+        expect((sm as any).count).toBe(1);
+    });
 });

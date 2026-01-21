@@ -40,12 +40,6 @@ describe("Resource Generator Routes", () => {
         app.decorate("cdnUpdaterService", mockCdnUpdaterService);
         app.decorate("notifierService", mockNotifierService);
 
-        // Initialize type provider is done inside route plugin via `withTypeProvider`
-        // But in unit test we might just skip complex type logic if we mock schema.
-        // However, the route file calls `fastify.withTypeProvider<ZodTypeProvider>()`.
-        // Fastify instance needs to be compatible.
-        // Standard Fastify() is fine as long as we don't strictly enforce TS types on `app` var here.
-
         await app.register(route);
         await app.ready();
     });
@@ -159,6 +153,35 @@ describe("Resource Generator Routes", () => {
         await jest.runAllTimersAsync();
 
         expect(mockNotifierService.error).toHaveBeenCalled();
+
+        jest.useRealTimers();
+    });
+
+    test("should handle error in deferred notification if notifier fails", async () => {
+        jest.useFakeTimers({
+            doNotFake: ["nextTick", "setImmediate"],
+        });
+
+        mockResourceGeneratorService.captureResources.mockResolvedValue([]);
+        mockCdnUpdaterService.update.mockResolvedValue({ url: "u" });
+        mockCdnUpdaterService.verifyContentUpdate.mockResolvedValue(true);
+        mockNotifierService.info.mockRejectedValue(new Error("Notify fail"));
+
+        await app.inject({
+            method: "POST",
+            url: "/res_gen",
+            payload: {
+                targetUrl: "u",
+                projectName: "p",
+                targetFileName: "f",
+                notifications: ["token"],
+            },
+        });
+
+        await jest.runAllTimersAsync();
+
+        // Should not crash, but log error internally
+        expect(mockNotifierService.info).toHaveBeenCalled();
 
         jest.useRealTimers();
     });

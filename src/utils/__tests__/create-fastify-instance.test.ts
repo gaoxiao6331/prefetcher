@@ -107,4 +107,34 @@ describe("createFastifyInstance", () => {
         expect(res.statusCode).toBe(418);
         await app.close();
     });
+
+    test("should set debug log level in debug mode", async () => {
+        (globalThis as any).startParams = { debug: true };
+        const app = await createFastifyInstance();
+        expect(app.log.level).toBe("debug");
+        await app.close();
+        delete (globalThis as any).startParams;
+    });
+
+    test("should handle error alerting branch", async () => {
+        // Ensure NOT in debug mode for alerting branch
+        (globalThis as any).startParams = { debug: false };
+        const app = await createFastifyInstance();
+
+        // Mock alert
+        (app as any).alert = jest.fn();
+
+        app.get("/error-alert", async () => {
+            throw new Error("Alert Me");
+        });
+
+        await app.inject({
+            method: "GET",
+            url: "/error-alert"
+        });
+
+        expect((app as any).alert).toHaveBeenCalled();
+        await app.close();
+        delete (globalThis as any).startParams;
+    });
 });

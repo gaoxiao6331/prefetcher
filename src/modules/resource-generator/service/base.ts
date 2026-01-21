@@ -53,6 +53,10 @@ abstract class BaseService implements ResourceGeneratorService {
 				executablePath: PUPPETEER_EXECUTABLE_PATH,
 			});
 
+			if (!this.browser) {
+				throw new Error("Failed to initialize browser");
+			}
+
 			this.browser.on("disconnected", () => {
 				this.log.warn("Puppeteer browser disconnected");
 				this.browser = null;
@@ -126,15 +130,15 @@ abstract class BaseService implements ResourceGeneratorService {
 			page.on(
 				"request",
 				bindAsyncContext((request) => {
-					if (request.isInterceptResolutionHandled()) return;
-
-					// Only track GET requests, but ensure others are allowed to continue
-					if (request.method() !== "GET") {
-						request.continue();
-						return;
-					}
-
 					try {
+						if (request.isInterceptResolutionHandled()) return;
+
+						// Only track GET requests, but ensure others are allowed to continue
+						if (request.method() !== "GET") {
+							request.continue();
+							return;
+						}
+
 						id++;
 						const requestId = id.toString();
 						// Inject a custom header to correlate request and response later
@@ -153,7 +157,7 @@ abstract class BaseService implements ResourceGeneratorService {
 					} catch (err) {
 						this.log.warn(`Request interception failed: ${err}`);
 						if (!request.isInterceptResolutionHandled()) {
-							request.continue();
+							request.continue().catch(() => { });
 						}
 					}
 				}),
