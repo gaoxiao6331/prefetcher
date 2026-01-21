@@ -5,7 +5,13 @@ import fs from "fs";
 import JsDelivrService from "../js-delivr-service";
 
 // Mock external dependencies
-jest.mock("fs");
+jest.mock("fs", () => ({
+	existsSync: jest.fn(),
+	writeFileSync: jest.fn(),
+	promises: {
+		readFile: jest.fn(),
+	},
+}));
 jest.mock("child_process");
 jest.mock("axios");
 
