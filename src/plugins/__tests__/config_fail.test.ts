@@ -1,5 +1,5 @@
+import * as path from "node:path";
 import Fastify from "fastify";
-import * as path from "path";
 
 describe("Config Plugin Error Path", () => {
 	// biome-ignore lint/suspicious/noExplicitAny: mock console.log

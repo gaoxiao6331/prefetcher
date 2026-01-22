@@ -85,6 +85,7 @@ describe("Semaphore", () => {
 		const sm = new Semaphore(1);
 		// Force an undefined into tasks list to hit the else/falsy branch of 'if (next)'
 		// although in normal usage it's always a function.
+		// biome-ignore lint/suspicious/noExplicitAny: access private
 		(sm as any).tasks.push(undefined);
 
 		// This should not throw and should simply consume the undefined
@@ -92,6 +93,7 @@ describe("Semaphore", () => {
 
 		// After release, count should still be the same as if it was consumed
 		// because we inside 'if (tasks.length > 0)' branch.
+		// biome-ignore lint/suspicious/noExplicitAny: access private
 		expect((sm as any).count).toBe(1);
 	});
 });

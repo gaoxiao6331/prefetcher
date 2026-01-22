@@ -1,7 +1,7 @@
+import { exec } from "node:child_process";
+import fs from "node:fs";
 import axios from "axios";
-import { exec } from "child_process";
 import type { FastifyInstance } from "fastify";
-import fs from "fs";
 import JsDelivrService from "../js-delivr-service";
 
 // Mock external dependencies
@@ -91,6 +91,7 @@ describe("JsDelivrService", () => {
 				},
 			},
 			log: { info: jest.fn() },
+			// biome-ignore lint/suspicious/noExplicitAny: mock fastify
 		} as any;
 		const service = await JsDelivrService.create(minimalConfig);
 		// Access private for coverage

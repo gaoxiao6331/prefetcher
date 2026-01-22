@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer, { type Browser } from "puppeteer";
-import { env, PUPPETEER_EXECUTABLE_PATH } from "@/env";
+import { PUPPETEER_EXECUTABLE_PATH } from "@/env";
 import { isDebugMode } from "@/utils/is";
 
 import { Semaphore } from "@/utils/semaphore";
@@ -36,7 +36,7 @@ abstract class BaseService implements ResourceGeneratorService {
 	}
 
 	private async initBrowser() {
-		if (this.browser && this.browser.connected) return;
+		if (this.browser?.connected) return;
 
 		try {
 			if (this.browser) {
@@ -189,7 +189,7 @@ abstract class BaseService implements ResourceGeneratorService {
 						try {
 							const buffer = await response.buffer();
 							resourceSizeKB = buffer.length / 1024;
-						} catch (e) {
+						} catch (_e) {
 							// Ignored: Buffer access might fail for various reasons (CORS, etc.)
 						}
 

@@ -3,6 +3,7 @@ import createFastifyInstance from "../create-fastify-instance";
 // Mock plugins
 jest.mock("../../plugins/config", () => {
 	const fp = require("fastify-plugin");
+	// biome-ignore lint/suspicious/noExplicitAny: mock fastify
 	return fp(async (fastify: any) => {
 		fastify.decorate("config", {
 			app: { port: 3000 },
@@ -17,6 +18,7 @@ jest.mock("../../plugins/monitor", () => {
 
 jest.mock("../../plugins/alert", () => {
 	const fp = require("fastify-plugin");
+	// biome-ignore lint/suspicious/noExplicitAny: mock fastify
 	return fp(async (fastify: any) => {
 		fastify.decorate("alert", jest.fn());
 	});
@@ -34,6 +36,7 @@ describe("createFastifyInstance", () => {
 	test("should propagate traceId", async () => {
 		const app = await createFastifyInstance();
 
+		// biome-ignore lint/suspicious/noExplicitAny: mock request
 		app.get("/test-trace", async (req: any) => {
 			return { traceId: req.traceId };
 		});
@@ -53,6 +56,7 @@ describe("createFastifyInstance", () => {
 	test("should use existing traceId", async () => {
 		const app = await createFastifyInstance();
 
+		// biome-ignore lint/suspicious/noExplicitAny: mock request
 		app.get("/test-trace-2", async (req: any) => {
 			return { traceId: req.traceId };
 		});
@@ -88,7 +92,7 @@ describe("createFastifyInstance", () => {
 
 	test("should use existing status code on error", async () => {
 		const app = await createFastifyInstance();
-		app.get("/error-code", async (req, reply) => {
+		app.get("/error-code", async (_req, reply) => {
 			reply.status(418);
 			throw new Error("Teapot");
 		});
@@ -103,19 +107,23 @@ describe("createFastifyInstance", () => {
 	});
 
 	test("should set debug log level in debug mode", async () => {
+		// biome-ignore lint/suspicious/noExplicitAny: access globalThis
 		(globalThis as any).startParams = { debug: true };
 		const app = await createFastifyInstance();
 		expect(app.log.level).toBe("debug");
 		await app.close();
+		// biome-ignore lint/suspicious/noExplicitAny: access globalThis
 		delete (globalThis as any).startParams;
 	});
 
 	test("should handle error alerting branch", async () => {
 		// Ensure NOT in debug mode for alerting branch
+		// biome-ignore lint/suspicious/noExplicitAny: access globalThis
 		(globalThis as any).startParams = { debug: false };
 		const app = await createFastifyInstance();
 
 		// Mock alert
+		// biome-ignore lint/suspicious/noExplicitAny: access alert
 		(app as any).alert = jest.fn();
 
 		app.get("/error-alert", async () => {
@@ -127,8 +135,10 @@ describe("createFastifyInstance", () => {
 			url: "/error-alert",
 		});
 
+		// biome-ignore lint/suspicious/noExplicitAny: access alert
 		expect((app as any).alert).toHaveBeenCalled();
 		await app.close();
+		// biome-ignore lint/suspicious/noExplicitAny: access globalThis
 		delete (globalThis as any).startParams;
 	});
 });

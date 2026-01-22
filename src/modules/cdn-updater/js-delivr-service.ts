@@ -1,9 +1,9 @@
+import { exec } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { promisify } from "node:util";
 import axios from "axios";
-import { exec } from "child_process";
 import type { FastifyInstance } from "fastify";
-import fs from "fs";
-import path from "path";
-import { promisify } from "util";
 
 const execPromise = promisify(exec);
 

@@ -4,6 +4,7 @@ import JsOnlyService from "../service/js-only-service";
 
 jest.mock("puppeteer");
 jest.mock("@/utils/trace-context", () => ({
+	// biome-ignore lint/suspicious/noExplicitAny: mock bind
 	bindAsyncContext: (fn: any) => fn,
 	getLogger: jest.fn().mockReturnValue(null),
 }));
@@ -26,6 +27,7 @@ function createMockPage() {
 }
 
 // Helper function to create mock browser
+// biome-ignore lint/suspicious/noExplicitAny: mock page
 function createMockBrowser(mockPage: any) {
 	return {
 		newPage: jest.fn().mockResolvedValue(mockPage),
@@ -47,6 +49,7 @@ function createMockFastify(): FastifyInstance {
 }
 
 // Helper function to create mock request
+// biome-ignore lint/suspicious/noExplicitAny: mock request
 function createMockRequest(overrides: any = {}) {
 	return {
 		method: () => "GET",
@@ -60,6 +63,7 @@ function createMockRequest(overrides: any = {}) {
 }
 
 // Helper function to create mock response
+// biome-ignore lint/suspicious/noExplicitAny: mock response
 function createMockResponse(overrides: any = {}) {
 	return {
 		request: () => ({
@@ -76,8 +80,11 @@ function createMockResponse(overrides: any = {}) {
 
 describe("JsOnlyService", () => {
 	let fastifyMock: FastifyInstance;
+	// biome-ignore lint/suspicious/noExplicitAny: mock service
 	let service: any;
+	// biome-ignore lint/suspicious/noExplicitAny: mock page
 	let mockPage: any;
+	// biome-ignore lint/suspicious/noExplicitAny: mock browser
 	let mockBrowser: any;
 
 	beforeEach(async () => {
@@ -99,10 +106,12 @@ describe("JsOnlyService", () => {
 		});
 
 		test("should handle browser disconnected event", async () => {
-			let disconnectListener: Function | undefined;
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let disconnectListener: ((...args: any[]) => void) | undefined;
 			(puppeteer.launch as jest.Mock).mockImplementationOnce(async () => {
 				const browserWithListener = { ...mockBrowser, on: jest.fn() };
 				browserWithListener.on.mockImplementation(
+					// biome-ignore lint/suspicious/noExplicitAny: mock listener
 					(event: string, listener: any) => {
 						if (event === "disconnected") disconnectListener = listener;
 					},
@@ -141,13 +150,18 @@ describe("JsOnlyService", () => {
 
 	describe("Resource Capture", () => {
 		test("should handle request and response events", async () => {
-			let requestListener: Function | undefined;
-			let responseListener: Function | undefined;
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let requestListener: ((arg: any) => void | Promise<void>) | undefined;
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let responseListener: ((arg: any) => void | Promise<void>) | undefined;
 
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "request") requestListener = listener;
-				if (event === "response") responseListener = listener;
-			});
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "request") requestListener = listener;
+					if (event === "response") responseListener = listener;
+				},
+			);
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockRequest = createMockRequest();
@@ -164,10 +178,14 @@ describe("JsOnlyService", () => {
 
 	describe("Request Interception", () => {
 		test("should handle non-GET requests", async () => {
-			let requestListener: Function | undefined;
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "request") requestListener = listener;
-			});
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let requestListener: ((arg: any) => void | Promise<void>) | undefined;
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "request") requestListener = listener;
+				},
+			);
 
 			const mockPostRequest = createMockRequest({
 				method: () => "POST",
@@ -182,10 +200,14 @@ describe("JsOnlyService", () => {
 		});
 
 		test("should handle request interception failure", async () => {
-			let requestListener: Function | undefined;
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "request") requestListener = listener;
-			});
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let requestListener: ((arg: any) => void | Promise<void>) | undefined;
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "request") requestListener = listener;
+				},
+			);
 
 			const mockRequest = createMockRequest({
 				method: () => {
@@ -205,10 +227,14 @@ describe("JsOnlyService", () => {
 		});
 
 		test("should handle already resolved interception", async () => {
-			let requestListener: Function | undefined;
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "request") requestListener = listener;
-			});
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let requestListener: ((arg: any) => void | Promise<void>) | undefined;
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "request") requestListener = listener;
+				},
+			);
 
 			const mockRequest = createMockRequest({
 				isInterceptResolutionHandled: () => true,
@@ -225,10 +251,14 @@ describe("JsOnlyService", () => {
 
 	describe("Response Processing", () => {
 		test("should handle response processing failure", async () => {
-			let responseListener: Function | undefined;
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "response") responseListener = listener;
-			});
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let responseListener: ((arg: any) => void | Promise<void>) | undefined;
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "response") responseListener = listener;
+				},
+			);
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockResponse = {
@@ -246,10 +276,14 @@ describe("JsOnlyService", () => {
 		});
 
 		test("should skip non-GET responses", async () => {
-			let responseListener: Function | undefined;
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "response") responseListener = listener;
-			});
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let responseListener: ((arg: any) => void | Promise<void>) | undefined;
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "response") responseListener = listener;
+				},
+			);
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockResponse = createMockResponse({
@@ -263,10 +297,14 @@ describe("JsOnlyService", () => {
 		});
 
 		test("should skip responses without request ID", async () => {
-			let responseListener: Function | undefined;
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "response") responseListener = listener;
-			});
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let responseListener: ((arg: any) => void | Promise<void>) | undefined;
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "response") responseListener = listener;
+				},
+			);
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockResponse = createMockResponse({
@@ -280,13 +318,18 @@ describe("JsOnlyService", () => {
 		});
 
 		test("should handle various HTTP status codes", async () => {
-			let requestListener: Function | undefined;
-			let responseListener: Function | undefined;
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let requestListener: ((arg: any) => void | Promise<void>) | undefined;
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let responseListener: ((arg: any) => void | Promise<void>) | undefined;
 
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "request") requestListener = listener;
-				if (event === "response") responseListener = listener;
-			});
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "request") requestListener = listener;
+					if (event === "response") responseListener = listener;
+				},
+			);
 
 			mockPage.goto.mockImplementation(async () => {
 				// Set up request first
@@ -320,13 +363,18 @@ describe("JsOnlyService", () => {
 		});
 
 		test("should handle buffer retrieval failure", async () => {
-			let requestListener: Function | undefined;
-			let responseListener: Function | undefined;
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let requestListener: ((arg: any) => void | Promise<void>) | undefined;
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let responseListener: ((arg: any) => void | Promise<void>) | undefined;
 
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "request") requestListener = listener;
-				if (event === "response") responseListener = listener;
-			});
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "request") requestListener = listener;
+					if (event === "response") responseListener = listener;
+				},
+			);
 
 			mockPage.goto.mockImplementation(async () => {
 				if (requestListener) {
@@ -381,13 +429,18 @@ describe("JsOnlyService", () => {
 
 	describe("Edge Cases", () => {
 		test("should handle complex edge case scenarios", async () => {
-			let requestListener: Function | undefined;
-			let responseListener: Function | undefined;
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let requestListener: ((arg: any) => void | Promise<void>) | undefined;
+			// biome-ignore lint/suspicious/noExplicitAny: mock listener
+			let responseListener: ((arg: any) => void | Promise<void>) | undefined;
 
-			mockPage.on.mockImplementation((event: string, listener: Function) => {
-				if (event === "request") requestListener = listener;
-				if (event === "response") responseListener = listener;
-			});
+			mockPage.on.mockImplementation(
+				// biome-ignore lint/suspicious/noExplicitAny: mock listener
+				(event: string, listener: (arg: any) => void | Promise<void>) => {
+					if (event === "request") requestListener = listener;
+					if (event === "response") responseListener = listener;
+				},
+			);
 
 			mockPage.goto.mockImplementation(async () => {
 				// 1. Normal request to populate map

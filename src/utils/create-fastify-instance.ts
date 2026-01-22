@@ -1,11 +1,11 @@
+import crypto from "node:crypto";
+import path from "node:path";
 import sensible from "@fastify/sensible";
-import crypto from "crypto";
 import Fastify from "fastify";
 import {
 	serializerCompiler,
 	validatorCompiler,
 } from "fastify-type-provider-zod";
-import path from "path";
 import type pino from "pino";
 import alertPlugin from "../plugins/alert";
 import configPlugin from "../plugins/config";

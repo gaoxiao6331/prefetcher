@@ -1,4 +1,4 @@
-import { AsyncLocalStorage, AsyncResource } from "async_hooks";
+import { AsyncLocalStorage, AsyncResource } from "node:async_hooks";
 import type { FastifyBaseLogger } from "fastify";
 
 // 定义上下文类型

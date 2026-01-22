@@ -7,12 +7,14 @@ jest.mock("../start", () => ({
 
 describe("CLI Entrypoint", () => {
 	let originalArgv: string[];
+	// biome-ignore lint/suspicious/noExplicitAny: mock exit
 	let originalExit: any;
 
 	beforeEach(() => {
 		jest.clearAllMocks();
 		originalArgv = process.argv;
 		originalExit = process.exit;
+		// biome-ignore lint/suspicious/noExplicitAny: mock exit
 		process.exit = jest.fn() as any;
 	});
 
