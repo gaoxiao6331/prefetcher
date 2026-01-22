@@ -1,10 +1,10 @@
 import type { CapturedResource } from "../type";
 import BaseService from "./base";
 
-class AllJsService extends BaseService {
+class AllJsAndCssService extends BaseService {
 	protected override filter(resource: CapturedResource[]) {
-		// Keep only JavaScript files
-		return resource.filter((item) => item.type === "script");
+		// Keep JavaScript and CSS files
+		return resource.filter((item) => item.type === "script" || item.type === "stylesheet");
 	}
 
 	protected override rank(res: CapturedResource[]) {
@@ -13,4 +13,4 @@ class AllJsService extends BaseService {
 	}
 }
 
-export default AllJsService;
+export default AllJsAndCssService;
