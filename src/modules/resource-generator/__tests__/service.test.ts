@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer from "puppeteer";
-import JsOnlyService from "../service/js-only-service";
+import JsOnlyService from "../service/all-js-service";
 
 jest.mock("puppeteer");
 jest.mock("@/utils/trace-context", () => ({

@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import routes from "./route";
-import Service from "./service/js-only-service";
+import Service from "./service/all-js-service";
 import type { ResourceGeneratorService } from "./type";
 
 const resourceGeneratorModule: FastifyPluginAsync = async (fastify, _opts) => {
