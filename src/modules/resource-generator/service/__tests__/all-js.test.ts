@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer from "puppeteer";
-import JsOnlyService from "../service/all-js-service";
+import JsOnlyService from "../all-js-service";
 
 jest.mock("puppeteer");
 jest.mock("@/utils/trace-context", () => ({
@@ -78,7 +78,7 @@ function createMockResponse(overrides: any = {}) {
 	};
 }
 
-describe("JsOnlyService", () => {
+describe("AllJsService", () => {
 	let fastifyMock: FastifyInstance;
 	// biome-ignore lint/suspicious/noExplicitAny: mock service
 	let service: any;

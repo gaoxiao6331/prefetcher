@@ -1,15 +1,12 @@
 import type { CapturedResource } from "../type";
-import BaseService from "./base";
+import AllJsService from "./all-js-service";
 
-class AllJsAndCssService extends BaseService {
+class AllJsAndCssService extends AllJsService {
 	protected override filter(resource: CapturedResource[]) {
 		// Keep JavaScript and CSS files
-		return resource.filter((item) => item.type === "script" || item.type === "stylesheet");
-	}
-
-	protected override rank(res: CapturedResource[]) {
-		// Sort resources by size in descending order
-		return res.sort((a, b) => b.sizeKB - a.sizeKB);
+		return resource.filter(
+			(item) => item.type === "script" || item.type === "stylesheet",
+		);
 	}
 }
 
