@@ -18,7 +18,7 @@ jest.mock("../schema", () => ({
 }));
 
 describe("Resource Generator Routes", () => {
-	let app: any;
+	let app: ReturnType<typeof Fastify>;
 	const mockResourceGeneratorService = {
 		captureResources: jest.fn(),
 	};

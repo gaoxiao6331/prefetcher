@@ -6,7 +6,7 @@ import LarkService from "../lark-webhook-bot-service";
 jest.mock("axios");
 
 describe("LarkService", () => {
-	let fastifyMock: any;
+	let fastifyMock: FastifyInstance;
 	let larkService: LarkService;
 
 	const TEST_TOKENS = ["fake-token-1", "fake-token-2"];

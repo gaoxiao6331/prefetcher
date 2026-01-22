@@ -16,7 +16,7 @@ jest.mock("child_process");
 jest.mock("axios");
 
 describe("JsDelivrService", () => {
-	let fastifyMock: any;
+	let fastifyMock: FastifyInstance;
 	let jsDelivrService: JsDelivrService;
 
 	// Helper to mock exec callback for success

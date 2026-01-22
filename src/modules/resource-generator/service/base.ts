@@ -14,7 +14,7 @@ abstract class BaseService implements ResourceGeneratorService {
 	// Limit concurrent pages to 5 to avoid crashing the server
 	private readonly semaphore = new Semaphore(5);
 
-	constructor(private readonly fastify: FastifyInstance) { }
+	constructor(private readonly fastify: FastifyInstance) {}
 
 	/**
 	 * Get logger, prioritize logger with traceId
@@ -29,6 +29,7 @@ abstract class BaseService implements ResourceGeneratorService {
 		) => BaseService,
 		fastify: FastifyInstance,
 	) {
+		// biome-ignore lint/complexity/noThisInStatic: biome bug
 		const service = new this(fastify);
 		await service.initBrowser();
 		return service;
@@ -156,7 +157,7 @@ abstract class BaseService implements ResourceGeneratorService {
 					} catch (err) {
 						this.log.warn(`Request interception failed: ${err}`);
 						if (!request.isInterceptResolutionHandled()) {
-							request.continue().catch(() => { });
+							request.continue().catch(() => {});
 						}
 					}
 				}),

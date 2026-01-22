@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import type { FastifyInstance } from "fastify";
 import puppeteer from "puppeteer";
 import BaseService from "../base";
 
@@ -54,7 +54,7 @@ class TestService extends BaseService {
 }
 
 describe("BaseService", () => {
-	let fastifyMock: any;
+	let fastifyMock: FastifyInstance;
 
 	beforeEach(() => {
 		fastifyMock = createMockFastify();
