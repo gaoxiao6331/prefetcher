@@ -1,20 +1,21 @@
 # Prefetcher
 
-A resource prefetching service built with Fastify and TypeScript. Captures JavaScript resources from web pages, uploads them to CDN, and optionally sends notifications.
+[中文文档](./README_zh.md) | English
+
+A resource prefetching service built with Fastify and TypeScript. Captures web page resources to generate core resource lists, uploads them to CDN for other sites to use with Prefetch, and optionally sends notifications.
 
 ## 🎯 Purpose
 
 This service helps optimize web application performance by:
 
-1. Analyzing web pages using Puppeteer to capture loaded JavaScript resources
-2. Generating resource lists sorted by size
+1. Analyzing web pages using Puppeteer to capture loaded resources
+2. Generating core resource lists based on strategies
 3. Uploading resource lists to jsDelivr CDN via GitHub
 4. Sending deployment notifications via Lark webhooks (optional)
 
-Use cases:
-- Generate prefetch/preload hints for web applications
+**Use Cases:**
+- Generate prefetch/preload resource lists for web applications
 - Automate CDN deployment workflows
-- Track resource loading patterns
 
 ## ✨ Features
 
@@ -29,15 +30,15 @@ Use cases:
 
 ### Prerequisites
 
-- Node.js >= 18
-- pnpm or npm
-- Git with SSH access to GitHub
+- Node.js >= 20
+- pnpm
+- Git with SSH access
 - Lark webhook tokens (optional, for notifications)
 
 ### Installation
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/gaoxiao6331/prefetcher.git
 cd prefetcher
 pnpm install
 pnpm build
@@ -45,25 +46,32 @@ pnpm build
 
 ### Configuration
 
-Set environment variables as needed:
+#### Environment Variables
 
 ```bash
-# Optional: specify Chrome/Chromium path (uses bundled Chromium by default)
+# Specify Chrome/Chromium path
 export PUPPETEER_EXECUTABLE_PATH=/path/to/chrome
 
-# Optional: for notifications
+# Lark webhook tokens for notifications (optional)
 export LARK_BOT_TOKENS=token1,token2,token3
 ```
 
-Configure CDN settings in `src/config/file/dev.ts` or `src/config/file/prod.ts`:
+#### CDN Configuration
+
+Configure CDN settings in `src/config/file/dev.ts`:
 
 ```typescript
 {
   port: 3000,
   cdn: {
     jsDelivr: {
+      // Local repository path, service will clone remote repo to this path
       localPath: "/path/to/local/repo",
+      
+      // Repository address for uploading resource lists, ensure using SSH address to avoid login
       remoteAddr: "git@github.com:user/repo.git",
+      
+      // Git commit name and email
       git: {
         name: "Your Name",
         email: "your.email@example.com"
@@ -73,17 +81,22 @@ Configure CDN settings in `src/config/file/dev.ts` or `src/config/file/prod.ts`:
 }
 ```
 
+> **⚠️ Note:** Configuration files are loaded based on the `NODE_ENV` environment variable. For example, to configure production, create `prod.ts` and set `NODE_ENV` to `prod`. See `src/plugins/config.ts` for details.
+
 ### Running
 
 ```bash
-# Development mode with auto-reload
+# Development mode (auto-reload)
 pnpm dev
 
 # Debug mode (visible browser)
 pnpm dev:debug
 
-# Production mode
-pnpm run
+# Build production code
+pnpm build
+
+# Start service
+pnpm start
 ```
 
 Server runs on `http://localhost:3000` by default.
@@ -96,7 +109,7 @@ Server runs on `http://localhost:3000` by default.
 
 Captures resources from a URL and deploys to CDN.
 
-#### Request
+#### Request Parameters
 
 ```json
 {
@@ -110,11 +123,11 @@ Captures resources from a URL and deploys to CDN.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `targetUrl` | string | Yes | URL to analyze |
+| `targetUrl` | string | Yes | Target URL to analyze |
 | `projectName` | string | Yes | GitHub branch name |
 | `targetFileName` | string | Yes | Output filename |
-| `template` | string | No | Template with `__content_placeholder__` |
-| `notifications` | string[] | No | Lark webhook tokens |
+| `template` | string | No | Template string with `__content_placeholder__` |
+| `notifications` | string[] | No | Array of Lark webhook tokens |
 
 #### Response
 
@@ -146,7 +159,6 @@ src/
 │   └── notifier/              # Sends Lark notifications
 ├── plugins/
 │   ├── config.ts             # Configuration management
-│   ├── logger.ts             # Logging setup
 │   ├── monitor.ts            # Prometheus metrics
 │   └── alert.ts              # Error alerting
 ├── utils/                    # Utility functions
@@ -160,17 +172,43 @@ src/
 **Resource Generator** (`src/modules/resource-generator/`)
 - Uses Puppeteer to intercept network requests
 - Tracks resource size and load time
-- Filters and sorts resources by size
+- Filters and sorts core resources
 
 **CDN Updater** (`src/modules/cdn-updater/`)
-- Manages git operations (clone, commit, push)
+- Manages Git operations (clone, commit, push)
 - Purges jsDelivr cache after updates
 - Verifies content deployment
 
 **Notifier** (`src/modules/notifier/`)
 - Sends messages to Lark webhooks
-- Retries failed requests with backoff
+- Retries failed requests with exponential backoff
 - Supports multiple webhook tokens
+
+## 📋 Resource Capture Strategy
+
+Considering that route lazy loading is a common performance optimization, the page waits until the following conditions are met before being considered "loaded":
+
+- No more than 2 network connections
+- This state persists for at least 500 milliseconds
+
+Uses Puppeteer's `networkidle2` event instead of the `load` event.
+
+> See implementation in `src/modules/resource-generator/service/base.ts`
+
+## 🎯 Core Resource Selection Strategies
+
+Currently implements 3 strategies:
+
+### 1. ALL-JS Strategy
+Selects all captured JS files and sorts them by size in descending order to determine priority.
+
+### 2. ALL-JS-CSS Strategy
+Selects captured JS and CSS files and sorts them by size in descending order to determine priority.
+
+### 3. INTERCEPTION & BLANK SCREEN DETECTION Strategy
+Intercepts the loading of one file at a time to determine if it causes a blank screen, thus identifying critical resources, and sorts by size in descending order to determine priority.
+
+> **Note:** The current code implements the ALL-JS strategy.
 
 ## 🧪 Testing
 
@@ -182,13 +220,14 @@ pnpm test
 pnpm test -- path/to/test.ts
 ```
 
-The project has 100% test coverage.
+The project has **100%** test coverage.
 
 ## 📊 Monitoring
 
 Prometheus metrics are available at `/metrics`:
+
 - Request duration
-- Request count by status
+- Request count by status code
 - Active requests
 
 ## 🐛 Debug Mode
@@ -197,8 +236,6 @@ Prometheus metrics are available at `/metrics`:
 pnpm dev:debug
 ```
 
-Debug mode shows the browser window and enables verbose logging.
-
-## License
-
-ISC
+Debug mode features:
+- Shows browser window (non-headless mode)
+- Enables verbose logging
