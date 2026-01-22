@@ -5,7 +5,6 @@ import LarkService from "../lark-webhook-bot-service";
 
 jest.mock("axios");
 
-
 describe("LarkService", () => {
 	let fastifyMock: any;
 	let larkService: LarkService;
@@ -19,7 +18,6 @@ describe("LarkService", () => {
 				warn: jest.fn(),
 				info: jest.fn(),
 			},
-
 		} as unknown as FastifyInstance;
 
 		larkService = await LarkService.create(fastifyMock);
@@ -32,7 +30,6 @@ describe("LarkService", () => {
 			status: 200,
 			data: { code: 0, msg: "success" },
 		});
-
 	});
 
 	test("should throw error if tokens list is empty", async () => {
@@ -84,8 +81,6 @@ describe("LarkService", () => {
 
 		// It should have tried multiple times (3 times default)
 		expect(axios.post).toHaveBeenCalledTimes(3);
-
-
 	}, 10000); // increase timeout
 
 	test("should throw error if Lark API returns non-zero code", async () => {

@@ -1,4 +1,3 @@
-
 import axios from "axios";
 import { exec } from "child_process";
 import type { FastifyInstance } from "fastify";
@@ -67,7 +66,9 @@ describe("JsDelivrService", () => {
 
 	test("should throw error only if config is missing", async () => {
 		const badFastify = { config: {} } as any;
-		await expect(JsDelivrService.create(badFastify)).rejects.toThrow("Invalid jsDelivr config");
+		await expect(JsDelivrService.create(badFastify)).rejects.toThrow(
+			"Invalid jsDelivr config",
+		);
 	});
 
 	test("should handle missing optional git config", async () => {
@@ -150,20 +151,26 @@ describe("JsDelivrService", () => {
 		});
 
 		test("should create file if not exists", async () => {
-			(fs.existsSync as jest.Mock).mockReturnValueOnce(true) // localPath check
+			(fs.existsSync as jest.Mock)
+				.mockReturnValueOnce(true) // localPath check
 				.mockReturnValueOnce(false); // file check
 			await jsDelivrService.update("main", "new-file.js", "content");
-			expect(fs.writeFileSync).toHaveBeenCalledWith(expect.stringContaining("new-file.js"), "");
+			expect(fs.writeFileSync).toHaveBeenCalledWith(
+				expect.stringContaining("new-file.js"),
+				"",
+			);
 		});
 
 		test("should warn if git pull fails", async () => {
-			(exec as unknown as jest.Mock).mockImplementation((cmd: string, cb: any) => {
-				if (cmd.includes("git pull")) {
-					cb(new Error("Pull failed"), { stdout: "", stderr: "" });
-				} else {
-					cb(null, { stdout: "M test.js", stderr: "" });
-				}
-			});
+			(exec as unknown as jest.Mock).mockImplementation(
+				(cmd: string, cb: any) => {
+					if (cmd.includes("git pull")) {
+						cb(new Error("Pull failed"), { stdout: "", stderr: "" });
+					} else {
+						cb(null, { stdout: "M test.js", stderr: "" });
+					}
+				},
+			);
 
 			await jsDelivrService.update("main", "test.js", "content");
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
@@ -205,7 +212,9 @@ describe("JsDelivrService", () => {
 				data: "finished in string",
 			});
 			await jsDelivrService["purgeJsDelivrCache"]("ns", "pj", "f", "b");
-			expect(fastifyMock.log.info).toHaveBeenCalledWith(expect.stringContaining("completed"));
+			expect(fastifyMock.log.info).toHaveBeenCalledWith(
+				expect.stringContaining("completed"),
+			);
 		});
 
 		test("should throw error when purge fails", async () => {

@@ -105,7 +105,9 @@ class JsDelivrService implements CdnUpdaterService {
 					`cd "${resolvedLocalPath}" && git pull origin "${branchName}"`,
 				);
 			} catch (e) {
-				this.log.warn(`Failed to pull ${branchName}, might be new local branch or divergence`);
+				this.log.warn(
+					`Failed to pull ${branchName}, might be new local branch or divergence`,
+				);
 			}
 		} catch (error) {
 			// Branch doesn't exist locally, check if it exists remotely

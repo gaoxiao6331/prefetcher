@@ -12,7 +12,7 @@ const config: Config = {
 				email: "gaoxiao6331@163.com",
 			},
 		},
-	}
+	},
 };
 
 export default config;

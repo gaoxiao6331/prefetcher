@@ -14,10 +14,9 @@ type MessageType = "info" | "warn" | "error";
 
 // 使用这个服务前需要配置飞书webhook token
 class LarkWebhookBotService implements NotifierService {
-	private constructor(private fastify: FastifyInstance) { }
+	private constructor(private fastify: FastifyInstance) {}
 
 	static async create(fastify: FastifyInstance) {
-
 		return new LarkWebhookBotService(fastify);
 	}
 
@@ -133,7 +132,6 @@ class LarkWebhookBotService implements NotifierService {
 			// 出现错误抛出异常
 			const tokenStr = JSON.stringify(tokens);
 			const logTokens = tokenStr;
-
 
 			const failedReasons = results
 				.filter((r) => r.status === "rejected")
