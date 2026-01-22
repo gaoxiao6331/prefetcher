@@ -17,7 +17,7 @@ abstract class BaseService implements ResourceGeneratorService {
 	constructor(private readonly fastify: FastifyInstance) { }
 
 	/**
-	 * 获取 logger，优先使用带 traceId 的 logger
+	 * Get logger, prioritize logger with traceId
 	 */
 	private get log() {
 		return getLogger() ?? this.fastify.log;
@@ -123,10 +123,9 @@ abstract class BaseService implements ResourceGeneratorService {
 			await using pageObj = await this.getPage();
 			const page = pageObj.page;
 
-			// Enable request interception to inject tracking headers
-			// await page.setRequestInterception(true); // Already enabled in getPage()
+			// Request interception already enabled in getPage()
 
-			// 使用 bindAsyncContext 绑定上下文，确保事件回调中 getLogger() 能正常工作
+			// Use bindAsyncContext to bind context, ensuring getLogger() works properly in event callbacks
 			page.on(
 				"request",
 				bindAsyncContext((request) => {

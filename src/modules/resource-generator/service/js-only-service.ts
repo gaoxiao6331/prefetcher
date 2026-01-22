@@ -3,12 +3,12 @@ import BaseService from "./base";
 
 class JsOnlyService extends BaseService {
 	protected override filter(resource: CapturedResource[]) {
-		// 只保留js文件
+		// Keep only JavaScript files
 		return resource.filter((item) => item.type === "script");
 	}
 
 	protected override rank(res: CapturedResource[]) {
-		// 按照资源体积从大到小排序
+		// Sort resources by size in descending order
 		return res.sort((a, b) => b.sizeKB - a.sizeKB);
 	}
 }

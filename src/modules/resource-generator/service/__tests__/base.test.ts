@@ -5,97 +5,148 @@ import puppeteer from "puppeteer";
 
 jest.mock("puppeteer");
 
+// Helper function to create mock Fastify instance
+function createMockFastify() {
+    return {
+        log: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+        config: {}
+    } as any;
+}
+
+// Helper function to create mock browser
+function createMockBrowser(connected = true) {
+    return {
+        close: jest.fn().mockResolvedValue(undefined),
+        connected,
+        on: jest.fn(),
+        newPage: jest.fn(),
+    };
+}
+
+// Helper function to create mock page
+function createMockPage() {
+    return {
+        on: jest.fn(),
+        goto: jest.fn(),
+        setRequestInterception: jest.fn(),
+        isClosed: jest.fn().mockReturnValue(false),
+        close: jest.fn(),
+    };
+}
+
+// Test implementation of BaseService
+class TestService extends BaseService {
+    protected filter(resource: any[]) {
+        return resource;
+    }
+
+    protected rank(res: any[]) {
+        return res;
+    }
+
+    public async generate() {
+        return { resources: [], resultFileName: "test" };
+    }
+
+    // Expose protected method for testing
+    public async triggerGetPage() {
+        return (this as any).getPage();
+    }
+}
+
 describe("BaseService", () => {
     let fastifyMock: any;
 
     beforeEach(() => {
-        fastifyMock = {
-            log: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-            config: {}
-        } as any;
+        fastifyMock = createMockFastify();
         jest.clearAllMocks();
     });
 
-    class TestService extends BaseService {
-        protected filter(resource: any[]) { return resource; }
-        protected rank(res: any[]) { return res; }
-        public async generate() { return { resources: [], resultFileName: "test" }; }
-        public async triggerGetPage() { return (this as any).getPage(); }
-    }
+    describe("Browser Initialization", () => {
+        test("should handle browser initialization failure", async () => {
+            const service = new TestService(fastifyMock);
 
-    test("should handle browser initialization failure", async () => {
-        const service = new TestService(fastifyMock);
+            (puppeteer.launch as jest.Mock).mockResolvedValue(null);
 
-        // Mock puppeteer.launch to return null
-        (puppeteer.launch as jest.Mock).mockResolvedValue(null);
+            await expect(service.triggerGetPage()).rejects.toThrow("Failed to initialize browser");
+        });
 
-        await expect(service.triggerGetPage()).rejects.toThrow("Failed to initialize browser");
+        test("should return early if browser already exists and is connected", async () => {
+            const service = new TestService(fastifyMock);
+            const mockBrowser = createMockBrowser(true);
+            (service as any).browser = mockBrowser;
+
+            await (service as any).initBrowser();
+
+            expect(puppeteer.launch).not.toHaveBeenCalled();
+        });
+
+        test("should re-initialize if browser is disconnected", async () => {
+            const mockPage = createMockPage();
+            const disconnectedBrowser = createMockBrowser(false);
+            const newBrowser = createMockBrowser(true);
+
+            newBrowser.newPage.mockResolvedValue(mockPage);
+            (puppeteer.launch as jest.Mock).mockResolvedValue(newBrowser);
+
+            const service = new TestService(fastifyMock);
+            (service as any).browser = disconnectedBrowser;
+
+            await service.triggerGetPage();
+
+            expect(fastifyMock.log.warn).toHaveBeenCalledWith(expect.stringContaining("Browser not connected"));
+            expect(disconnectedBrowser.close).toHaveBeenCalled();
+            expect(puppeteer.launch).toHaveBeenCalled();
+        });
+
+        test("should throw if initBrowser fails to set browser", async () => {
+            const service = new TestService(fastifyMock);
+
+            // Mock initBrowser to do nothing (not set this.browser)
+            jest.spyOn(service as any, 'initBrowser').mockImplementation(async () => { });
+
+            await expect(service.triggerGetPage()).rejects.toThrow("Failed to initialize browser");
+        });
     });
 
-    test("close() should be idempotent when no browser exists", async () => {
-        const service = new TestService(fastifyMock);
-        await service.close();
-        expect(fastifyMock.log.info).not.toHaveBeenCalledWith("Puppeteer browser closed");
+    describe("Browser Cleanup", () => {
+        test("should be idempotent when no browser exists", async () => {
+            const service = new TestService(fastifyMock);
+
+            await service.close();
+
+            expect(fastifyMock.log.info).not.toHaveBeenCalledWith("Puppeteer browser closed");
+        });
+
+        test("should close browser if it exists", async () => {
+            const mockBrowser = createMockBrowser();
+            const service = new TestService(fastifyMock);
+            (service as any).browser = mockBrowser;
+
+            await service.close();
+
+            expect(mockBrowser.close).toHaveBeenCalled();
+            expect(fastifyMock.log.info).toHaveBeenCalledWith("Puppeteer browser closed");
+            expect((service as any).browser).toBeNull();
+        });
     });
 
-    test("close() should close browser if it exists", async () => {
-        const mockBrowser = {
-            close: jest.fn().mockResolvedValue(undefined)
-        };
-        const service = new TestService(fastifyMock);
-        (service as any).browser = mockBrowser;
+    describe("Page Management", () => {
+        test("should create new page with request interception enabled", async () => {
+            const mockPage = createMockPage();
+            const mockBrowser = createMockBrowser(true);
+            mockBrowser.newPage.mockResolvedValue(mockPage);
 
-        await service.close();
+            (puppeteer.launch as jest.Mock).mockResolvedValue(mockBrowser);
 
-        expect(mockBrowser.close).toHaveBeenCalled();
-        expect(fastifyMock.log.info).toHaveBeenCalledWith("Puppeteer browser closed");
-        expect((service as any).browser).toBeNull();
-    });
+            const service = new TestService(fastifyMock);
+            (service as any).browser = mockBrowser;
 
-    test("initBrowser should return early if browser already exists and is connected", async () => {
-        const service = new TestService(fastifyMock);
-        (service as any).browser = { connected: true };
-        await (service as any).initBrowser();
-        expect(puppeteer.launch).not.toHaveBeenCalled();
-    });
+            const pageObj = await service.triggerGetPage();
 
-    test("getPage should re-init if browser is disconnected", async () => {
-        const mockPage = {
-            on: jest.fn(),
-            goto: jest.fn(),
-            setRequestInterception: jest.fn(),
-            isClosed: jest.fn().mockReturnValue(false),
-            close: jest.fn(),
-        };
-        const mockBrowser = {
-            newPage: jest.fn().mockResolvedValue(mockPage),
-            connected: false, // Disconnected
-            on: jest.fn(),
-            close: jest.fn().mockResolvedValue(undefined),
-        };
-        const newMockBrowser = {
-            newPage: jest.fn().mockResolvedValue(mockPage),
-            connected: true,
-            on: jest.fn(),
-            close: jest.fn().mockResolvedValue(undefined),
-        };
-
-        (puppeteer.launch as jest.Mock).mockResolvedValue(newMockBrowser);
-        const service = new TestService(fastifyMock);
-        (service as any).browser = mockBrowser;
-
-        await service.triggerGetPage();
-
-        expect(fastifyMock.log.warn).toHaveBeenCalledWith(expect.stringContaining("Browser not connected"));
-        expect(mockBrowser.close).toHaveBeenCalled();
-        expect(puppeteer.launch).toHaveBeenCalled();
-    });
-
-    test("getPage should throw if initBrowser fails to set browser", async () => {
-        const service = new TestService(fastifyMock);
-        // Mock initBrowser to do nothing (not set this.browser)
-        jest.spyOn(service as any, 'initBrowser').mockImplementation(async () => { });
-
-        await expect(service.triggerGetPage()).rejects.toThrow("Failed to initialize browser");
+            expect(mockBrowser.newPage).toHaveBeenCalled();
+            expect(mockPage.setRequestInterception).toHaveBeenCalledWith(true);
+            expect(pageObj.page).toBe(mockPage);
+        });
     });
 });
