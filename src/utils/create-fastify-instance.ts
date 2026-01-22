@@ -5,7 +5,6 @@ import {
 	serializerCompiler,
 	validatorCompiler,
 } from "fastify-type-provider-zod";
-import fs from "fs";
 import path from "path";
 import type pino from "pino";
 import alertPlugin from "../plugins/alert";
@@ -106,7 +105,7 @@ export default async function createFastifyInstance() {
 	await fastify.register(configPlugin);
 
 	// traceId 相关 hooks
-	fastify.addHook("onRequest", async (request, reply) => {
+	fastify.addHook("onRequest", async (request, _reply) => {
 		// 将 request.id 映射到 request.traceId，方便业务代码使用
 		request.traceId = request.id;
 
@@ -126,7 +125,7 @@ export default async function createFastifyInstance() {
 	fastify.log.info("TraceId configured");
 
 	// Global Error Handler Stub for Alerting
-	fastify.setErrorHandler((error, request, reply) => {
+	fastify.setErrorHandler((error, _request, reply) => {
 		fastify.log.error(error, `[GLOBAL]: Request failed: ${error.message}`);
 		let code = error?.statusCode || 500;
 		// 手动设置了相应的status code

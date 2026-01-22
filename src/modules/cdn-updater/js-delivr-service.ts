@@ -8,7 +8,7 @@ import { promisify } from "util";
 const execPromise = promisify(exec);
 
 import { getLogger } from "@/utils/trace-context";
-import type { CdnUpdaterService, UploadResult } from "./type";
+import type { CdnUpdaterService } from "./type";
 
 // 使用这个服务前需要配置github ssh
 class JsDelivrService implements CdnUpdaterService {
@@ -104,12 +104,12 @@ class JsDelivrService implements CdnUpdaterService {
 				await execPromise(
 					`cd "${resolvedLocalPath}" && git pull origin "${branchName}"`,
 				);
-			} catch (e) {
+			} catch (_e) {
 				this.log.warn(
 					`Failed to pull ${branchName}, might be new local branch or divergence`,
 				);
 			}
-		} catch (error) {
+		} catch (_error) {
 			// Branch doesn't exist locally, check if it exists remotely
 			try {
 				await execPromise(
@@ -122,7 +122,7 @@ class JsDelivrService implements CdnUpdaterService {
 				await execPromise(
 					`cd "${resolvedLocalPath}" && git checkout -b "${branchName}" "origin/${branchName}"`,
 				);
-			} catch (remoteError) {
+			} catch (_remoteError) {
 				// Branch doesn't exist remotely either, create it
 				// TODO 清空main分支，基于空白分支创建新分支
 				this.log.info(`Branch "${branchName}" does not exist, creating it`);
@@ -236,10 +236,9 @@ class JsDelivrService implements CdnUpdaterService {
 					`jsDelivr cache purge failed: ${url}, response: ${data}`,
 				);
 			}
-		} catch (error: any) {
-			throw new Error(
-				`jsDelivr cache purge failed: ${url}, error: ${error.message}`,
-			);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			throw new Error(`jsDelivr cache purge failed: ${url}, error: ${message}`);
 		}
 	}
 

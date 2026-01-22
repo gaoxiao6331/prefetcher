@@ -35,15 +35,15 @@ export const start = async (params: StartParams) => {
 			await fastify.close(); // Fastify 会等待现有请求处理完毕后再关闭
 			fastify.log.info("Server shut down gracefully");
 			process.exit(0);
-		} catch (error: any) {
-			fastify.log.error("Error during shutdown:", error);
+		} catch (error) {
+			fastify.log.error(error, "Error during shutdown:");
 			process.exit(1);
 		}
 	});
 
-	process.on("unhandledRejection", (reason, promise) => {
+	process.on("unhandledRejection", (reason, _promise) => {
 		fastify.log.error(reason, "Unhandled Rejection occurred");
-		if (!startParams.debug) {
+		if (!isDebugMode()) {
 			fastify.alert(`Unhandled Rejection occurred: ${reason}`);
 		}
 	});

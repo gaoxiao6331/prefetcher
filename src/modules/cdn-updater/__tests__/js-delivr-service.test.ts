@@ -21,9 +21,17 @@ describe("JsDelivrService", () => {
 
 	// Helper to mock exec callback for success
 	const mockExecSuccess = (stdout = "") => {
-		(exec as unknown as jest.Mock).mockImplementation((cmd: any, cb: any) => {
-			cb(null, { stdout, stderr: "" });
-		});
+		(exec as unknown as jest.Mock).mockImplementation(
+			(
+				_cmd: string,
+				cb: (
+					err: Error | null,
+					res: { stdout: string; stderr: string },
+				) => void,
+			) => {
+				cb(null, { stdout, stderr: "" });
+			},
+		);
 	};
 
 	beforeEach(async () => {
@@ -65,6 +73,7 @@ describe("JsDelivrService", () => {
 	});
 
 	test("should throw error only if config is missing", async () => {
+		// biome-ignore lint/suspicious/noExplicitAny: mock fastify
 		const badFastify = { config: {} } as any;
 		await expect(JsDelivrService.create(badFastify)).rejects.toThrow(
 			"Invalid jsDelivr config",
@@ -85,6 +94,7 @@ describe("JsDelivrService", () => {
 		} as any;
 		const service = await JsDelivrService.create(minimalConfig);
 		// Access private for coverage
+		// biome-ignore lint/suspicious/noExplicitAny: access private
 		await (service as any).configureGit("/tmp");
 		expect(service).toBeDefined();
 	});
@@ -112,7 +122,13 @@ describe("JsDelivrService", () => {
 
 		test("should checkout remote branch if local branch missing", async () => {
 			(exec as unknown as jest.Mock).mockImplementation(
-				(cmd: string, cb: any) => {
+				(
+					cmd: string,
+					cb: (
+						err: Error | null,
+						res: { stdout: string; stderr: string },
+					) => void,
+				) => {
 					if (cmd.includes('rev-parse --verify "feature-branch"')) {
 						cb(new Error("Branch not found"), { stdout: "", stderr: "" });
 					} else {
@@ -133,7 +149,13 @@ describe("JsDelivrService", () => {
 
 		test("should create new branch if neither local nor remote exists", async () => {
 			(exec as unknown as jest.Mock).mockImplementation(
-				(cmd: string, cb: any) => {
+				(
+					cmd: string,
+					cb: (
+						err: Error | null,
+						res: { stdout: string; stderr: string },
+					) => void,
+				) => {
 					if (cmd.includes("rev-parse")) {
 						cb(new Error("Not found"), { stdout: "", stderr: "" });
 					} else {
@@ -163,7 +185,13 @@ describe("JsDelivrService", () => {
 
 		test("should warn if git pull fails", async () => {
 			(exec as unknown as jest.Mock).mockImplementation(
-				(cmd: string, cb: any) => {
+				(
+					cmd: string,
+					cb: (
+						err: Error | null,
+						res: { stdout: string; stderr: string },
+					) => void,
+				) => {
 					if (cmd.includes("git pull")) {
 						cb(new Error("Pull failed"), { stdout: "", stderr: "" });
 					} else {
@@ -180,7 +208,13 @@ describe("JsDelivrService", () => {
 
 		test("should skip commit if no changes", async () => {
 			(exec as unknown as jest.Mock).mockImplementation(
-				(cmd: string, cb: any) => {
+				(
+					cmd: string,
+					cb: (
+						err: Error | null,
+						res: { stdout: string; stderr: string },
+					) => void,
+				) => {
 					if (cmd.includes("status --porcelain")) {
 						cb(null, { stdout: "", stderr: "" });
 					} else {
@@ -198,7 +232,8 @@ describe("JsDelivrService", () => {
 		});
 
 		test("should throw error if remote address is invalid", async () => {
-			fastifyMock.config.cdn.jsDelivr.remoteAddr = "invalid-url";
+			// biome-ignore lint/suspicious/noExplicitAny: access config
+			(fastifyMock.config as any).cdn.jsDelivr.remoteAddr = "invalid-url";
 			const service = await JsDelivrService.create(fastifyMock);
 			await expect(service.update("main", "f", "c")).rejects.toThrow(
 				"Invalid github remote address",
@@ -211,7 +246,8 @@ describe("JsDelivrService", () => {
 			(axios.get as jest.Mock).mockResolvedValue({
 				data: "finished in string",
 			});
-			await jsDelivrService["purgeJsDelivrCache"]("ns", "pj", "f", "b");
+			// biome-ignore lint/suspicious/noExplicitAny: access private
+			await (jsDelivrService as any).purgeJsDelivrCache("ns", "pj", "f", "b");
 			expect(fastifyMock.log.info).toHaveBeenCalledWith(
 				expect.stringContaining("completed"),
 			);
@@ -223,7 +259,8 @@ describe("JsDelivrService", () => {
 			});
 
 			await expect(
-				jsDelivrService["purgeJsDelivrCache"](
+				// biome-ignore lint/suspicious/noExplicitAny: access private
+				(jsDelivrService as any).purgeJsDelivrCache(
 					"ns",
 					"proj",
 					"file.js",
@@ -236,7 +273,8 @@ describe("JsDelivrService", () => {
 			(axios.get as jest.Mock).mockRejectedValue(new Error("Network Error"));
 
 			await expect(
-				jsDelivrService["purgeJsDelivrCache"](
+				// biome-ignore lint/suspicious/noExplicitAny: access private
+				(jsDelivrService as any).purgeJsDelivrCache(
 					"ns",
 					"proj",
 					"file.js",

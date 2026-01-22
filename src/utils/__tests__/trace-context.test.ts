@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "async_hooks";
 import {
 	bindAsyncContext,
 	getLogger,
@@ -15,6 +14,7 @@ describe("trace-context", () => {
 	test("should retrieve context within run", () => {
 		const mockContext = {
 			traceId: "123",
+			// biome-ignore lint/suspicious/noExplicitAny: mock logger
 			logger: { info: jest.fn() } as any,
 		};
 
@@ -27,6 +27,7 @@ describe("trace-context", () => {
 	test("bindAsyncContext should preserve context", async () => {
 		const mockContext = {
 			traceId: "abc",
+			// biome-ignore lint/suspicious/noExplicitAny: mock logger
 			logger: {} as any,
 		};
 
@@ -42,14 +43,15 @@ describe("trace-context", () => {
 
 		// Verify that if we bind inside run, and call outside... context might persist if binding worked?
 		// Actually AsyncResource.bind binds the *current* execution resource to the function.
-		let unboundFn, boundFn;
+		let unboundFn: (() => string | undefined) | undefined;
+		let boundFn: (() => string | undefined) | undefined;
 		traceStorage.run(mockContext, () => {
 			unboundFn = () => getTraceId();
 			boundFn = bindAsyncContext(() => getTraceId());
 		});
 
 		// Outside run
-		expect(unboundFn!()).toBeUndefined();
-		expect(boundFn!()).toBe("abc");
+		expect(unboundFn?.()).toBeUndefined();
+		expect(boundFn?.()).toBe("abc");
 	});
 });

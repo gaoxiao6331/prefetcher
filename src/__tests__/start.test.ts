@@ -1,3 +1,4 @@
+import type { FastifyInstance } from "fastify";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 import { start } from "../start";
 
@@ -7,9 +8,10 @@ jest.mock("@/utils/create-fastify-instance", () => ({
 }));
 
 describe("Start Function", () => {
-	let originalExit: any;
-	let originalProcessOn: any;
-	let mockFastify: any;
+	let originalExit: (code?: number) => never;
+	let originalProcessOn: NodeJS.Process["on"];
+	// biome-ignore lint/suspicious/noExplicitAny: mock config
+	let mockFastify: Partial<FastifyInstance> & { alert: jest.Mock; config: any };
 
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -19,7 +21,8 @@ describe("Start Function", () => {
 			register: jest.fn().mockReturnThis(),
 			ready: jest.fn().mockResolvedValue(undefined),
 			close: jest.fn().mockResolvedValue(undefined),
-			log: { info: jest.fn(), error: jest.fn() },
+			// biome-ignore lint/suspicious/noExplicitAny: mock log
+			log: { info: jest.fn(), error: jest.fn() } as any,
 			alert: jest.fn(),
 			config: { port: 3000 },
 		};
@@ -27,14 +30,17 @@ describe("Start Function", () => {
 		(createFastifyInstance as jest.Mock).mockResolvedValue(mockFastify);
 
 		originalExit = process.exit;
+		// biome-ignore lint/suspicious/noExplicitAny: mock exit
 		process.exit = jest.fn() as any;
 		originalProcessOn = process.on;
+		// biome-ignore lint/suspicious/noExplicitAny: mock process.on
 		process.on = jest.fn() as any;
 	});
 
 	afterEach(() => {
 		process.exit = originalExit;
 		process.on = originalProcessOn;
+		// biome-ignore lint/suspicious/noExplicitAny: cleanup globalThis
 		delete (globalThis as any).startParams;
 	});
 
@@ -54,14 +60,16 @@ describe("Start Function", () => {
 	});
 
 	test("should handle listen failure", async () => {
-		mockFastify.listen.mockRejectedValue(new Error("Listen fail"));
+		(mockFastify.listen as jest.Mock).mockRejectedValue(
+			new Error("Listen fail"),
+		);
 
 		await start({ debug: false });
 		expect(process.exit).toHaveBeenCalledWith(1);
 	});
 
 	test("should handle SIGTERM", async () => {
-		let sigtermHandler: Function | undefined;
+		let sigtermHandler: (() => void) | undefined;
 		(process.on as jest.Mock).mockImplementation((event, handler) => {
 			if (event === "SIGTERM") sigtermHandler = handler;
 		});
@@ -76,7 +84,7 @@ describe("Start Function", () => {
 	});
 
 	test("should handle SIGTERM failure", async () => {
-		let sigtermHandler: Function | undefined;
+		let sigtermHandler: (() => void) | undefined;
 		(process.on as jest.Mock).mockImplementation((event, handler) => {
 			if (event === "SIGTERM") sigtermHandler = handler;
 		});
@@ -84,14 +92,17 @@ describe("Start Function", () => {
 		await start({ debug: false });
 
 		if (sigtermHandler) {
-			mockFastify.close.mockRejectedValueOnce(new Error("Close fail"));
+			(mockFastify.close as jest.Mock).mockRejectedValueOnce(
+				new Error("Close fail"),
+			);
 			await sigtermHandler();
 			expect(process.exit).toHaveBeenCalledWith(1);
 		}
 	});
 
 	test("should handle unhandledRejection (non-debug)", async () => {
-		let rejectionHandler: Function | undefined;
+		let rejectionHandler: // biome-ignore lint/suspicious/noExplicitAny: Node.js callback signature
+		((reason: any, promise: Promise<any>) => void) | undefined;
 		(process.on as jest.Mock).mockImplementation((event, handler) => {
 			if (event === "unhandledRejection") rejectionHandler = handler;
 		});
@@ -107,7 +118,8 @@ describe("Start Function", () => {
 	});
 
 	test("should handle unhandledRejection (debug)", async () => {
-		let rejectionHandler: Function | undefined;
+		let rejectionHandler: // biome-ignore lint/suspicious/noExplicitAny: Node.js callback signature
+		((reason: any, promise: Promise<any>) => void) | undefined;
 		(process.on as jest.Mock).mockImplementation((event, handler) => {
 			if (event === "unhandledRejection") rejectionHandler = handler;
 		});
@@ -121,7 +133,7 @@ describe("Start Function", () => {
 	});
 
 	test("should handle uncaughtException (non-debug)", async () => {
-		let exceptionHandler: Function | undefined;
+		let exceptionHandler: ((error: Error) => void) | undefined;
 		(process.on as jest.Mock).mockImplementation((event, handler) => {
 			if (event === "uncaughtException") exceptionHandler = handler;
 		});
@@ -138,7 +150,7 @@ describe("Start Function", () => {
 	});
 
 	test("should handle uncaughtException (debug)", async () => {
-		let exceptionHandler: Function | undefined;
+		let exceptionHandler: ((error: Error) => void) | undefined;
 		(process.on as jest.Mock).mockImplementation((event, handler) => {
 			if (event === "uncaughtException") exceptionHandler = handler;
 		});

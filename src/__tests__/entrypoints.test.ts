@@ -2,7 +2,6 @@ import Fastify from "fastify";
 import cdnUpdaterModule from "../modules/cdn-updater";
 import notifierModule from "../modules/notifier";
 import resourceGeneratorModule from "../modules/resource-generator";
-import { createResourceSchema } from "../modules/resource-generator/schema";
 import alertPlugin from "../plugins/alert";
 import monitorPlugin from "../plugins/monitor";
 
@@ -21,6 +20,7 @@ jest.mock("child_process");
 // Mock config plugin to avoid dynamic import issues in tests
 jest.mock("../plugins/config", () => {
 	const fp = require("fastify-plugin");
+	// biome-ignore lint/suspicious/noExplicitAny: mock fastify
 	return fp(async (fastify: any) => {
 		fastify.decorate("config", {
 			app: { port: 3000 },

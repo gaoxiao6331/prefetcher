@@ -16,6 +16,7 @@ describe("Plugins", () => {
 		await app.ready();
 
 		expect(app.hasDecorator("config")).toBe(true);
+		// biome-ignore lint/suspicious/noExplicitAny: access decorated config
 		expect((app as any).config.port).toBeDefined();
 	});
 
@@ -30,6 +31,7 @@ describe("Plugins", () => {
 		const mockNotifier = {
 			error: jest.fn(),
 		};
+		// biome-ignore lint/suspicious/noExplicitAny: mock service
 		app.decorate("notifierService", mockNotifier as any);
 
 		await app.register(alertPlugin);
@@ -50,6 +52,7 @@ describe("Plugins", () => {
 		const alertPlg = require("../alert").default;
 
 		const app = Fastify();
+		// biome-ignore lint/suspicious/noExplicitAny: mock service
 		app.decorate("notifierService", { error: jest.fn() } as any);
 		await app.register(alertPlg);
 		await app.ready();

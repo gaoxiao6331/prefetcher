@@ -1,5 +1,4 @@
 import Fastify from "fastify";
-import alertPlugin from "../alert";
 
 describe("Alert Plugin", () => {
 	test("should log error if notifierService fails", async () => {
@@ -9,9 +8,10 @@ describe("Alert Plugin", () => {
 			error: jest.fn().mockRejectedValue(new Error("Alert failed")),
 			info: jest.fn(),
 			warn: jest.fn(),
-		} as any;
+		};
 
-		app.decorate("notifierService", mockNotifier);
+		// biome-ignore lint/suspicious/noExplicitAny: mock service
+		app.decorate("notifierService", mockNotifier as any);
 
 		jest.doMock("../../env", () => ({
 			LARK_BOT_TOKENS: ["token1"],

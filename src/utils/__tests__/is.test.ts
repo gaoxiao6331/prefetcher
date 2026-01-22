@@ -1,7 +1,9 @@
 import { isDebugMode } from "../is";
 
 describe("is helper", () => {
+	// biome-ignore lint/suspicious/noExplicitAny: access globalThis
 	const originalGlobal = globalThis as any;
+	// biome-ignore lint/suspicious/noExplicitAny: store startParams
 	let originalStartParams: any;
 
 	beforeAll(() => {

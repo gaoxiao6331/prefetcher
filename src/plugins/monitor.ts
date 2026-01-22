@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import fastifyMetrics from "fastify-metrics";
 import fp from "fastify-plugin";
 
-const monitorPlugin: FastifyPluginAsync = async (fastify, opts) => {
+const monitorPlugin: FastifyPluginAsync = async (fastify, _opts) => {
 	await fastify.register(fastifyMetrics, {
 		endpoint: "/metrics",
 		defaultMetrics: { enabled: true },

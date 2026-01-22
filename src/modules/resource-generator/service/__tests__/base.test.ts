@@ -9,6 +9,7 @@ function createMockFastify() {
 	return {
 		log: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 		config: {},
+		// biome-ignore lint/suspicious/noExplicitAny: mock fastify
 	} as any;
 }
 
@@ -35,10 +36,12 @@ function createMockPage() {
 
 // Test implementation of BaseService
 class TestService extends BaseService {
+	// biome-ignore lint/suspicious/noExplicitAny: mock filter
 	protected filter(resource: any[]) {
 		return resource;
 	}
 
+	// biome-ignore lint/suspicious/noExplicitAny: mock rank
 	protected rank(res: any[]) {
 		return res;
 	}
@@ -49,6 +52,7 @@ class TestService extends BaseService {
 
 	// Expose protected method for testing
 	public async triggerGetPage() {
+		// biome-ignore lint/suspicious/noExplicitAny: access private
 		return (this as any).getPage();
 	}
 }
@@ -75,8 +79,10 @@ describe("BaseService", () => {
 		test("should return early if browser already exists and is connected", async () => {
 			const service = new TestService(fastifyMock);
 			const mockBrowser = createMockBrowser(true);
+			// biome-ignore lint/suspicious/noExplicitAny: access private
 			(service as any).browser = mockBrowser;
 
+			// biome-ignore lint/suspicious/noExplicitAny: access private
 			await (service as any).initBrowser();
 
 			expect(puppeteer.launch).not.toHaveBeenCalled();
@@ -91,6 +97,7 @@ describe("BaseService", () => {
 			(puppeteer.launch as jest.Mock).mockResolvedValue(newBrowser);
 
 			const service = new TestService(fastifyMock);
+			// biome-ignore lint/suspicious/noExplicitAny: access private
 			(service as any).browser = disconnectedBrowser;
 
 			await service.triggerGetPage();
@@ -107,6 +114,7 @@ describe("BaseService", () => {
 
 			// Mock initBrowser to do nothing (not set this.browser)
 			jest
+				// biome-ignore lint/suspicious/noExplicitAny: mock private
 				.spyOn(service as any, "initBrowser")
 				.mockImplementation(async () => {});
 
@@ -130,6 +138,7 @@ describe("BaseService", () => {
 		test("should close browser if it exists", async () => {
 			const mockBrowser = createMockBrowser();
 			const service = new TestService(fastifyMock);
+			// biome-ignore lint/suspicious/noExplicitAny: access private
 			(service as any).browser = mockBrowser;
 
 			await service.close();
@@ -138,6 +147,7 @@ describe("BaseService", () => {
 			expect(fastifyMock.log.info).toHaveBeenCalledWith(
 				"Puppeteer browser closed",
 			);
+			// biome-ignore lint/suspicious/noExplicitAny: access private
 			expect((service as any).browser).toBeNull();
 		});
 	});
@@ -151,6 +161,7 @@ describe("BaseService", () => {
 			(puppeteer.launch as jest.Mock).mockResolvedValue(mockBrowser);
 
 			const service = new TestService(fastifyMock);
+			// biome-ignore lint/suspicious/noExplicitAny: access private
 			(service as any).browser = mockBrowser;
 
 			const pageObj = await service.triggerGetPage();
