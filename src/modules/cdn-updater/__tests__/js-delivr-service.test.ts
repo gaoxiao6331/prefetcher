@@ -283,6 +283,22 @@ describe("JsDelivrService", () => {
 				),
 			).rejects.toThrow("jsDelivr cache purge failed");
 		});
+
+		test("should handle non-Error catch in purgeJsDelivrCache", async () => {
+			(axios.get as jest.Mock).mockRejectedValue("String Error");
+
+			await expect(
+				// biome-ignore lint/suspicious/noExplicitAny: access private
+				(jsDelivrService as any).purgeJsDelivrCache(
+					"ns",
+					"proj",
+					"file.js",
+					"branch",
+				),
+			).rejects.toThrow(
+				"jsDelivr cache purge failed: https://purge.jsdelivr.net/gh/ns/proj@branch/file.js, error: String Error",
+			);
+		});
 	});
 
 	describe("verifyContentUpdate", () => {
