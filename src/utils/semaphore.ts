@@ -9,7 +9,7 @@ export class Semaphore {
 	/**
 	 * @param max 最大并发许可数
 	 */
-	constructor(private readonly max: number) {
+	constructor(readonly max: number) {
 		this.count = max;
 	}
 

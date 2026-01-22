@@ -362,11 +362,9 @@ describe("JsOnlyService", () => {
 				{ url: "image.png", type: "image", sizeKB: 5, durationMs: 50 },
 			];
 
-			// @ts-expect-error - accessing private method for testing
 			const filtered = service.filter(resources);
 			expect(filtered.length).toBe(2);
 
-			// @ts-expect-error - accessing private method for testing
 			const ranked = service.rank(filtered);
 			expect(ranked[0].url).toBe("large.js");
 			expect(ranked[1].url).toBe("small.js");

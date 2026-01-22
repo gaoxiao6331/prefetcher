@@ -52,6 +52,7 @@ export const getLogger = (): FastifyBaseLogger | undefined => {
  * @param fn 需要绑定上下文的回调函数
  * @returns 绑定了当前 AsyncLocalStorage 上下文的新函数
  */
+// biome-ignore lint/suspicious/noExplicitAny: Generic function wrapper needs any for flexibility
 export function bindAsyncContext<T extends (...args: any[]) => any>(fn: T): T {
 	return AsyncResource.bind(fn);
 }

@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { createResourceSchema } from "./schema";
 
-const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
+const sniffRoutes: FastifyPluginAsync = async (fastify, _opts) => {
 	const app = fastify.withTypeProvider<ZodTypeProvider>();
 
 	app.post(
@@ -10,7 +10,7 @@ const sniffRoutes: FastifyPluginAsync = async (fastify, opts) => {
 		{
 			schema: createResourceSchema,
 		},
-		async (request, reply) => {
+		async (request, _reply) => {
 			const resourceGeneratorService = fastify.resourceGeneratorService;
 			const cdnUpdaterService = fastify.cdnUpdaterService;
 			const notifierService = fastify.notifierService;
