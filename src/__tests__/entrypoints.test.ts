@@ -6,7 +6,6 @@ import notifierModule from "../modules/notifier";
 import monitorPlugin from "../plugins/monitor";
 import alertPlugin from "../plugins/alert";
 import { createResourceSchema } from "../modules/resource-generator/schema";
-import prodConfig from "../config/file/prod";
 
 // Mock external dependencies
 jest.mock("puppeteer", () => ({
@@ -104,10 +103,5 @@ describe("Entrypoints and Plugins", () => {
         await fastify.register(alertPlugin);
         expect(fastify.alert).toBeDefined();
         await fastify.close();
-    });
-
-    test("Schema and Prod Config should be loadable", () => {
-        expect(createResourceSchema).toBeDefined();
-        expect(prodConfig).toBeDefined();
     });
 });

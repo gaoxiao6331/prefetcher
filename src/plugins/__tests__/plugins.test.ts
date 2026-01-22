@@ -1,7 +1,6 @@
 
 import Fastify from "fastify";
 import alertPlugin from "../alert";
-import loggerPlugin from "../logger";
 import monitorPlugin from "../monitor";
 import configPlugin from "../config";
 
@@ -19,12 +18,6 @@ describe("Plugins", () => {
 
         expect(app.hasDecorator("config")).toBe(true);
         expect((app as any).config.port).toBeDefined();
-    });
-
-    test("logger plugin should register", async () => {
-        const app = Fastify();
-        await app.register(loggerPlugin);
-        await app.ready();
     });
 
     test("monitor plugin should register", async () => {

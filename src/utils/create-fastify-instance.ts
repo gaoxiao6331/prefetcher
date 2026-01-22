@@ -10,7 +10,6 @@ import path from "path";
 import type pino from "pino";
 import alertPlugin from "../plugins/alert";
 import configPlugin from "../plugins/config";
-import loggerPlugin from "../plugins/logger";
 import monitorPlugin from "../plugins/monitor";
 import { isDebugMode } from "./is";
 import { traceStorage } from "./trace-context";
@@ -102,7 +101,6 @@ export default async function createFastifyInstance() {
 	fastify.setSerializerCompiler(serializerCompiler);
 
 	// Register custom plugins
-	await fastify.register(loggerPlugin);
 	await fastify.register(monitorPlugin);
 	await fastify.register(alertPlugin);
 	await fastify.register(configPlugin);

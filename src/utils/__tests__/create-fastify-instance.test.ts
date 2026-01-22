@@ -11,11 +11,6 @@ jest.mock("../../plugins/config", () => {
     });
 });
 
-jest.mock("../../plugins/logger", () => {
-    const fp = require("fastify-plugin");
-    return fp(async () => { });
-});
-
 jest.mock("../../plugins/monitor", () => {
     const fp = require("fastify-plugin");
     return fp(async () => { });
