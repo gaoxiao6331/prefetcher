@@ -51,7 +51,7 @@ describe("AllJsAndCssService", () => {
 	});
 
 	describe("filter", () => {
-		test("should keep only javascript and stylesheet files", () => {
+		test("should keep only javascript and stylesheet files", async () => {
 			const resources: CapturedResource[] = [
 				{
 					url: "test.js",
@@ -92,24 +92,26 @@ describe("AllJsAndCssService", () => {
 			];
 
 			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const filtered = (service as any).filter(resources);
+			const ctx = { url: "http://test.com", capturedResources: resources } as any;
+			const filteredCtx = await (service as any).filter(ctx);
 
-			expect(filtered).toHaveLength(2);
-			expect(filtered.map((r: CapturedResource) => r.url)).toContain("test.js");
-			expect(filtered.map((r: CapturedResource) => r.url)).toContain(
+			expect(filteredCtx.capturedResources).toHaveLength(2);
+			expect(filteredCtx.capturedResources.map((r: CapturedResource) => r.url)).toContain("test.js");
+			expect(filteredCtx.capturedResources.map((r: CapturedResource) => r.url)).toContain(
 				"test.css",
 			);
 		});
 
-		test("should handle empty resources", () => {
+		test("should handle empty resources", async () => {
 			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const filtered = (service as any).filter([]);
-			expect(filtered).toHaveLength(0);
+			const ctx = { url: "http://test.com", capturedResources: [] } as any;
+			const filteredCtx = await (service as any).filter(ctx);
+			expect(filteredCtx.capturedResources).toHaveLength(0);
 		});
 	});
 
 	describe("rank", () => {
-		test("should sort resources by size in descending order", () => {
+		test("should sort resources by size in descending order", async () => {
 			const resources: CapturedResource[] = [
 				{
 					url: "small.js",
@@ -141,12 +143,13 @@ describe("AllJsAndCssService", () => {
 			];
 
 			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const ranked = (service as any).rank(resources);
+			const ctx = { url: "http://test.com", capturedResources: resources } as any;
+			const rankedCtx = await (service as any).rank(ctx);
 
-			expect(ranked).toHaveLength(3);
-			expect(ranked[0].url).toBe("large.js");
-			expect(ranked[1].url).toBe("medium.js");
-			expect(ranked[2].url).toBe("small.js");
+			expect(rankedCtx.capturedResources).toHaveLength(3);
+			expect(rankedCtx.capturedResources[0].url).toBe("large.js");
+			expect(rankedCtx.capturedResources[1].url).toBe("medium.js");
+			expect(rankedCtx.capturedResources[2].url).toBe("small.js");
 		});
 	});
 });

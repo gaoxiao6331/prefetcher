@@ -409,13 +409,14 @@ describe("AllJsService", () => {
 				{ url: "large.js", type: "script", sizeKB: 50, durationMs: 100 },
 				{ url: "image.png", type: "image", sizeKB: 5, durationMs: 50 },
 			];
+			const ctx = { url: TEST_URL, capturedResources: resources } as any;
 
-			const filtered = service.filter(resources);
-			expect(filtered.length).toBe(2);
+			const filteredCtx = await service.filter(ctx);
+			expect(filteredCtx.capturedResources.length).toBe(2);
 
-			const ranked = service.rank(filtered);
-			expect(ranked[0].url).toBe("large.js");
-			expect(ranked[1].url).toBe("small.js");
+			const rankedCtx = await service.rank(filteredCtx);
+			expect(rankedCtx.capturedResources[0].url).toBe("large.js");
+			expect(rankedCtx.capturedResources[1].url).toBe("small.js");
 		});
 	});
 

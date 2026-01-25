@@ -36,14 +36,12 @@ function createMockPage() {
 
 // Test implementation of BaseService
 class TestService extends BaseService {
-	// biome-ignore lint/suspicious/noExplicitAny: mock filter
-	protected filter(resource: any[]) {
-		return resource;
+	protected async filter(ctx: any) {
+		return ctx;
 	}
 
-	// biome-ignore lint/suspicious/noExplicitAny: mock rank
-	protected rank(res: any[]) {
-		return res;
+	protected async rank(ctx: any) {
+		return ctx;
 	}
 
 	public async generate() {
@@ -116,7 +114,7 @@ describe("BaseService", () => {
 			jest
 				// biome-ignore lint/suspicious/noExplicitAny: mock private
 				.spyOn(service as any, "initBrowser")
-				.mockImplementation(async () => {});
+				.mockImplementation(async () => { });
 
 			await expect(service.triggerGetPage()).rejects.toThrow(
 				"Failed to initialize browser",
