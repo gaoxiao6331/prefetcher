@@ -5,7 +5,8 @@ import InterceptionBlankScreenService from "./service/interception-blank-screen-
 import type { ResourceGeneratorService } from "./type";
 
 const resourceGeneratorModule: FastifyPluginAsync = async (fastify, _opts) => {
-	const interceptionBlankScreenService = await InterceptionBlankScreenService.create(fastify);
+	const interceptionBlankScreenService =
+		await InterceptionBlankScreenService.create(fastify);
 	fastify.decorate("resourceGeneratorService", interceptionBlankScreenService);
 
 	fastify.addHook("onClose", async () => {

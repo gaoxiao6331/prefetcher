@@ -114,7 +114,7 @@ describe("BaseService", () => {
 			jest
 				// biome-ignore lint/suspicious/noExplicitAny: mock private
 				.spyOn(service as any, "initBrowser")
-				.mockImplementation(async () => { });
+				.mockImplementation(async () => {});
 
 			await expect(service.triggerGetPage()).rejects.toThrow(
 				"Failed to initialize browser",

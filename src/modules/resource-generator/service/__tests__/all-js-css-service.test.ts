@@ -92,14 +92,19 @@ describe("AllJsAndCssService", () => {
 			];
 
 			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const ctx = { url: "http://test.com", capturedResources: resources } as any;
+			const ctx = {
+				url: "http://test.com",
+				capturedResources: resources,
+			} as any;
 			const filteredCtx = await (service as any).filter(ctx);
 
 			expect(filteredCtx.capturedResources).toHaveLength(2);
-			expect(filteredCtx.capturedResources.map((r: CapturedResource) => r.url)).toContain("test.js");
-			expect(filteredCtx.capturedResources.map((r: CapturedResource) => r.url)).toContain(
-				"test.css",
-			);
+			expect(
+				filteredCtx.capturedResources.map((r: CapturedResource) => r.url),
+			).toContain("test.js");
+			expect(
+				filteredCtx.capturedResources.map((r: CapturedResource) => r.url),
+			).toContain("test.css");
 		});
 
 		test("should handle empty resources", async () => {
@@ -143,7 +148,10 @@ describe("AllJsAndCssService", () => {
 			];
 
 			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const ctx = { url: "http://test.com", capturedResources: resources } as any;
+			const ctx = {
+				url: "http://test.com",
+				capturedResources: resources,
+			} as any;
 			const rankedCtx = await (service as any).rank(ctx);
 
 			expect(rankedCtx.capturedResources).toHaveLength(3);

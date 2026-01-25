@@ -5,7 +5,11 @@ import { isDebugMode } from "@/utils/is";
 
 import { Semaphore } from "@/utils/semaphore";
 import { bindAsyncContext, getLogger } from "@/utils/trace-context";
-import type { CapturedResource, GenerateContext, ResourceGeneratorService } from "../type";
+import type {
+	CapturedResource,
+	GenerateContext,
+	ResourceGeneratorService,
+} from "../type";
 
 abstract class BaseService implements ResourceGeneratorService {
 	protected readonly requestHeader = "x-prefetcher-req-id";
@@ -14,7 +18,7 @@ abstract class BaseService implements ResourceGeneratorService {
 	// Limit concurrent pages to 5 to avoid crashing the server
 	protected readonly semaphore = new Semaphore(5);
 
-	constructor(protected readonly fastify: FastifyInstance) { }
+	constructor(protected readonly fastify: FastifyInstance) {}
 
 	/**
 	 * Get logger, prioritize logger with traceId
@@ -157,7 +161,7 @@ abstract class BaseService implements ResourceGeneratorService {
 					} catch (err) {
 						this.log.warn(`Request interception failed: ${err}`);
 						if (!request.isInterceptResolutionHandled()) {
-							request.continue().catch(() => { });
+							request.continue().catch(() => {});
 						}
 					}
 				}),

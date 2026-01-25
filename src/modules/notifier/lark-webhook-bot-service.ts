@@ -15,7 +15,7 @@ type MessageType = "info" | "warn" | "error";
 
 // Feishu webhook token needs to be configured before using this service
 class LarkWebhookBotService implements NotifierService {
-	private constructor(private fastify: FastifyInstance) { }
+	private constructor(private fastify: FastifyInstance) {}
 
 	static async create(fastify: FastifyInstance) {
 		return new LarkWebhookBotService(fastify);

@@ -1,8 +1,10 @@
-import type { CapturedResource, GenerateContext } from "../type";
+import type { GenerateContext } from "../type";
 import AllJsService from "./all-js-service";
 
 class AllJsAndCssService extends AllJsService {
-	protected override async filter(ctx: GenerateContext): Promise<GenerateContext> {
+	protected override async filter(
+		ctx: GenerateContext,
+	): Promise<GenerateContext> {
 		// Keep JavaScript and CSS files
 		return {
 			...ctx,

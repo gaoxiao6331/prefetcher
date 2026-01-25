@@ -4,7 +4,9 @@ import type { CapturedResource, GenerateContext } from "../type";
 import AllJsService from "./all-js-service";
 
 class InterceptionBlankScreenService extends AllJsService {
-	protected override async filter(ctx: GenerateContext): Promise<GenerateContext> {
+	protected override async filter(
+		ctx: GenerateContext,
+	): Promise<GenerateContext> {
 		// First filter and get all JS files
 		const baseCtx = await super.filter(ctx);
 		const resources = baseCtx.capturedResources;
@@ -24,9 +26,9 @@ class InterceptionBlankScreenService extends AllJsService {
 						if (req.isInterceptResolutionHandled()) return;
 
 						if (req.url() === resource.url) {
-							req.abort().catch(() => { });
+							req.abort().catch(() => {});
 						} else {
-							req.continue().catch(() => { });
+							req.continue().catch(() => {});
 						}
 					} catch (err) {
 						this.log.warn(`[Interception] Request handling failed: ${err}`);
@@ -42,13 +44,20 @@ class InterceptionBlankScreenService extends AllJsService {
 
 					const isBlank = await this.isBlankScreen(page);
 					if (isBlank) {
-						this.log.info(`[Interception] Resource ${resource.url} is critical (causes blank screen)`);
+						this.log.info(
+							`[Interception] Resource ${resource.url} is critical (causes blank screen)`,
+						);
 						return true;
 					}
-					this.log.info(`[Interception] Resource ${resource.url} is NOT critical`);
+					this.log.info(
+						`[Interception] Resource ${resource.url} is NOT critical`,
+					);
 					return false;
 				} catch (err) {
-					this.log.error(err, `[Interception] Failed to validate resource: ${resource.url}`);
+					this.log.error(
+						err,
+						`[Interception] Failed to validate resource: ${resource.url}`,
+					);
 					// Keep it if we can't determine (safety first)
 					return true;
 				}
@@ -56,7 +65,9 @@ class InterceptionBlankScreenService extends AllJsService {
 		);
 
 		const validationResults = await Promise.all(tasks);
-		const criticalResources = resources.filter((_, index) => validationResults[index]);
+		const criticalResources = resources.filter(
+			(_, index) => validationResults[index],
+		);
 
 		return {
 			...baseCtx,
