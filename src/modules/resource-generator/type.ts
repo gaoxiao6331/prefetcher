@@ -11,3 +11,8 @@ export interface CapturedResource {
 export interface ResourceGeneratorService {
 	captureResources(url: string): Promise<string[]>;
 }
+
+export interface GenerateContext {
+	url: string;
+	capturedResources: CapturedResource[];
+}

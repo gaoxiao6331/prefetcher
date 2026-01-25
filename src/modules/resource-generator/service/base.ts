@@ -5,21 +5,21 @@ import { isDebugMode } from "@/utils/is";
 
 import { Semaphore } from "@/utils/semaphore";
 import { bindAsyncContext, getLogger } from "@/utils/trace-context";
-import type { CapturedResource, ResourceGeneratorService } from "../type";
+import type { CapturedResource, GenerateContext, ResourceGeneratorService } from "../type";
 
 abstract class BaseService implements ResourceGeneratorService {
-	private readonly requestHeader = "x-prefetcher-req-id";
+	protected readonly requestHeader = "x-prefetcher-req-id";
 
-	private browser: Browser | null = null;
+	protected browser: Browser | null = null;
 	// Limit concurrent pages to 5 to avoid crashing the server
-	private readonly semaphore = new Semaphore(5);
+	protected readonly semaphore = new Semaphore(5);
 
-	constructor(private readonly fastify: FastifyInstance) {}
+	constructor(protected readonly fastify: FastifyInstance) { }
 
 	/**
 	 * Get logger, prioritize logger with traceId
 	 */
-	private get log() {
+	protected get log() {
 		return getLogger() ?? this.fastify.log;
 	}
 
@@ -70,9 +70,9 @@ abstract class BaseService implements ResourceGeneratorService {
 		}
 	}
 
-	protected abstract filter(resource: CapturedResource[]): CapturedResource[];
+	protected abstract filter(ctx: GenerateContext): Promise<GenerateContext>;
 
-	protected abstract rank(res: CapturedResource[]): CapturedResource[];
+	protected abstract rank(ctx: GenerateContext): Promise<GenerateContext>;
 
 	// Public close method to be called on shutdown
 	async close() {
@@ -83,7 +83,7 @@ abstract class BaseService implements ResourceGeneratorService {
 		}
 	}
 
-	private async getPage() {
+	protected async getPage() {
 		if (!this.browser || !this.browser.connected) {
 			this.log.warn("Browser not connected, re-initializing...");
 			await this.initBrowser();
@@ -157,7 +157,7 @@ abstract class BaseService implements ResourceGeneratorService {
 					} catch (err) {
 						this.log.warn(`Request interception failed: ${err}`);
 						if (!request.isInterceptResolutionHandled()) {
-							request.continue().catch(() => {});
+							request.continue().catch(() => { });
 						}
 					}
 				}),
@@ -215,9 +215,15 @@ abstract class BaseService implements ResourceGeneratorService {
 			// networkidle2: consider navigation finished when there are no more than 2 network connections for at least 500ms
 			await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
+			const ctx: GenerateContext = {
+				url,
+				capturedResources,
+			};
+
 			// Filter and rank resources before returning
-			const res = this.rank(this.filter(capturedResources));
-			return res.map((r) => r.url);
+			const filteredCtx = await this.filter(ctx);
+			const rankedCtx = await this.rank(filteredCtx);
+			return rankedCtx.capturedResources.map((r) => r.url);
 		});
 	}
 }

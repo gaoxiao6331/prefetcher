@@ -1,15 +1,21 @@
-import type { CapturedResource } from "../type";
+import type { CapturedResource, GenerateContext } from "../type";
 import BaseService from "./base";
 
 class AllJsService extends BaseService {
-	protected override filter(resource: CapturedResource[]) {
+	protected override async filter(ctx: GenerateContext): Promise<GenerateContext> {
 		// Keep only JavaScript files
-		return resource.filter((item) => item.type === "script");
+		return {
+			...ctx,
+			capturedResources: ctx.capturedResources.filter((item) => item.type === "script"),
+		};
 	}
 
-	protected override rank(res: CapturedResource[]) {
+	protected override async rank(ctx: GenerateContext): Promise<GenerateContext> {
 		// Sort resources by size in descending order
-		return res.sort((a, b) => b.sizeKB - a.sizeKB);
+		return {
+			...ctx,
+			capturedResources: ctx.capturedResources.sort((a, b) => b.sizeKB - a.sizeKB),
+		};
 	}
 }
 
