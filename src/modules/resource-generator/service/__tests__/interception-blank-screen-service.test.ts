@@ -41,8 +41,8 @@ describe("InterceptionBlankScreenService", () => {
 			screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			evaluate: jest
 				.fn()
-				.mockImplementation(async (fn: any, ...args: any[]) => {
-					// Default mock implementation - can be overridden in tests
+				// biome-ignore lint/suspicious/noExplicitAny: mock
+				.mockImplementation(async (_fn: any, ..._args: any[]) => {
 					return false;
 				}),
 		};
@@ -117,7 +117,9 @@ describe("InterceptionBlankScreenService", () => {
 				capturedResources: resources,
 			};
 
+			// biome-ignore lint/suspicious/noExplicitAny: mock
 			let requestHandler: any;
+			// biome-ignore lint/suspicious/noExplicitAny: mock
 			mockPage.on.mockImplementation((event: string, handler: any) => {
 				if (event === "request") requestHandler = handler;
 			});
@@ -208,6 +210,7 @@ describe("InterceptionBlankScreenService", () => {
 
 			mockPage.goto.mockRejectedValue(new Error("Navigation failed"));
 
+			// biome-ignore lint/suspicious/noExplicitAny: mock
 			const result = await (service as any).filter(ctx);
 			expect(result.capturedResources).toHaveLength(1);
 			expect(result.capturedResources[0].url).toBe("fail.js");
@@ -265,7 +268,7 @@ describe("InterceptionBlankScreenService", () => {
 
 			// Mock browser environment for evaluate
 			// biome-ignore lint/suspicious/noExplicitAny: mock
-			const setupMockEnv = (canvasContext: any, imageData: any) => {
+			const setupMockEnv = (canvasContext: any, _imageData: any) => {
 				// biome-ignore lint/suspicious/noExplicitAny: mock
 				(global as any).Image = class {
 					onload: any;
@@ -283,11 +286,15 @@ describe("InterceptionBlankScreenService", () => {
 				};
 			};
 
+			// biome-ignore lint/suspicious/noExplicitAny: mock
 			const originalImage = (global as any).Image;
+			// biome-ignore lint/suspicious/noExplicitAny: mock
 			const originalDocument = (global as any).document;
 
 			try {
+				// biome-ignore lint/suspicious/noExplicitAny: mock
 				mockPage.evaluate.mockImplementation(
+					// biome-ignore lint/suspicious/noExplicitAny: mock
 					async (fn: any, ...args: any[]) => {
 						return await fn(...args);
 					},
@@ -334,10 +341,13 @@ describe("InterceptionBlankScreenService", () => {
 						setTimeout(() => this.onerror(new Error("load fail")), 0);
 					}
 				};
+				// biome-ignore lint/suspicious/noExplicitAny: mock
 				result = await (service as any).filter(ctx);
 				expect(result.capturedResources).toHaveLength(1);
 			} finally {
+				// biome-ignore lint/suspicious/noExplicitAny: mock
 				(global as any).Image = originalImage;
+				// biome-ignore lint/suspicious/noExplicitAny: mock
 				(global as any).document = originalDocument;
 			}
 		});

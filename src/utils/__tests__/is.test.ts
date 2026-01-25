@@ -1,21 +1,26 @@
-import { isDebugMode } from "../is";
+import { isDebugMode, isTsNode } from "../is";
 
 describe("is helper", () => {
-	// biome-ignore lint/suspicious/noExplicitAny: access globalThis
 	const originalGlobal = globalThis as any;
-	// biome-ignore lint/suspicious/noExplicitAny: store startParams
 	let originalStartParams: any;
+	const tsNodeSymbol = Symbol.for("ts-node.register.instance");
+	type ProcessWithTsNode = NodeJS.Process & { [key: symbol]: unknown };
+	const processWithTsNode = process as ProcessWithTsNode;
+	let originalTsNodeInstance: unknown;
 
 	beforeAll(() => {
 		originalStartParams = originalGlobal.startParams;
+		originalTsNodeInstance = processWithTsNode[tsNodeSymbol];
 	});
 
 	afterAll(() => {
 		originalGlobal.startParams = originalStartParams;
+		processWithTsNode[tsNodeSymbol] = originalTsNodeInstance;
 	});
 
 	beforeEach(() => {
 		originalGlobal.startParams = undefined;
+		delete processWithTsNode[tsNodeSymbol];
 	});
 
 	test("should return false if globalThis.startParams is undefined", () => {
@@ -35,5 +40,14 @@ describe("is helper", () => {
 	test("should return true if globalThis.startParams.debug is true", () => {
 		originalGlobal.startParams = { debug: true };
 		expect(isDebugMode()).toBe(true);
+	});
+
+	test("should return false when ts-node instance is not set", () => {
+		expect(isTsNode()).toBe(false);
+	});
+
+	test("should return true when ts-node instance is set", () => {
+		processWithTsNode[tsNodeSymbol] = {};
+		expect(isTsNode()).toBe(true);
 	});
 });

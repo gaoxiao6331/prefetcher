@@ -1,11 +1,10 @@
 // src/plugins/config.ts
 
-import chalk from "chalk";
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 import type { Config } from "@/config/type";
 import { env } from "@/env";
-import path from "node:path";
 import { isTsNode } from "@/utils/is";
 
 declare module "fastify" {
@@ -15,25 +14,23 @@ declare module "fastify" {
 }
 
 export default fp(async function configPlugin(fastify: FastifyInstance) {
-
 	try {
 		const entryPath = process.argv[1];
 
 		const entryDir = path.dirname(entryPath);
 
 		const baseConfigPath = `${entryDir}/config/file/${env}`;
+		const configPath = isTsNode()
+			? `${baseConfigPath}.ts`
+			: `${baseConfigPath}.js`;
 
-		let configModule;
-
-		const configPath = isTsNode() ? `${baseConfigPath}.ts` : `${baseConfigPath}.js`;
-
-		configModule = await import(configPath);
-
-
+		const configModule = await import(configPath);
 		const config = configModule?.default;
 
 		if (!config) {
-			throw new Error(`[Config Error]: Default export missing in '${env}' configuration.`);
+			throw new Error(
+				`[Config Error]: Default export missing in '${env}' configuration.`,
+			);
 		}
 
 		fastify.decorate("config", config);

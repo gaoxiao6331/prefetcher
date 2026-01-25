@@ -1,7 +1,11 @@
+import path from "node:path";
 import Fastify from "fastify";
 import alertPlugin from "../alert";
 import configPlugin from "../config";
 import monitorPlugin from "../monitor";
+
+let exitSpy: jest.SpyInstance;
+let originalArgv: string[];
 
 jest.mock("@/env", () => ({
 	env: "dev",
@@ -9,7 +13,25 @@ jest.mock("@/env", () => ({
 	isDebugMode: () => false,
 }));
 
+jest.mock("@/utils/is", () => ({
+	isTsNode: () => true,
+}));
+
 describe("Plugins", () => {
+	beforeEach(() => {
+		originalArgv = process.argv;
+		process.argv = [...originalArgv];
+		process.argv[1] = path.resolve(__dirname, "../../index.ts");
+		exitSpy = jest
+			.spyOn(process, "exit")
+			.mockImplementation(() => undefined as never);
+	});
+
+	afterEach(() => {
+		exitSpy.mockRestore();
+		process.argv = originalArgv;
+	});
+
 	test("config plugin should load config", async () => {
 		const app = Fastify();
 		await app.register(configPlugin);
