@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "cross-env NODE_ENV=dev nodemon",
         "dev:debug": "pnpm dev -- -d",
-        "build": "tsc -p tsconfig.build.json && tsc-alias",
+        "build": "tsc && tsc-alias",
         "start": "node dist/index.js start",
         "clean": "rm -rf dist",
         "fix": "biome check --fix .",
