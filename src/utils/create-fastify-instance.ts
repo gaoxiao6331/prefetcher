@@ -16,7 +16,7 @@ import { traceStorage } from "./trace-context";
 const TRACE_ID_HEADER = "x-trace-id";
 
 /**
- * 格式化时间为 yyyyMMddHHmmss
+ * Formats time to yyyyMMddHHmmss
  */
 const formatDateTime = (date: Date): string => {
 	const year = date.getFullYear();
@@ -29,7 +29,7 @@ const formatDateTime = (date: Date): string => {
 };
 
 /**
- * 生成唯一的 traceId
+ * Generates a unique traceId
  */
 const generateTraceId = (): string => {
 	const dateTime = formatDateTime(new Date());
@@ -37,7 +37,7 @@ const generateTraceId = (): string => {
 	return `${dateTime}${random}`;
 };
 
-// 扩展 FastifyRequest 类型
+// Extend FastifyRequest type
 declare module "fastify" {
 	interface FastifyRequest {
 		traceId: string;
@@ -59,21 +59,21 @@ export default async function createFastifyInstance() {
 	logTargets.push({
 		target: "pino-roll",
 		options: {
-			// 日志文件保存路径
+			// Path to save log files
 			file: path.join("logs", "app.log"),
-			// 轮转频率: 'daily', 'hourly', 毫秒值
+			// Rotation frequency: 'daily', 'hourly', or millisecond value
 			frequency: "daily",
-			// 或者按大小轮转 (例如 10MB)
+			// Or rotate by size (e.g., 10MB)
 			// size: '1m',
 			mkdir: true,
-			// 最多保留多少个日志文件
+			// Maximum number of log files to retain
 			limit: {
 				count: 100,
 			},
 		},
 	});
 
-	// 3. 初始化 Fastify
+	// 3. Initialize Fastify
 	const fastify = Fastify({
 		logger: {
 			level: isDebugMode() ? "debug" : "info",
@@ -82,7 +82,7 @@ export default async function createFastifyInstance() {
 			},
 		},
 		genReqId: (req) => {
-			// 优先使用请求头中的 traceId（支持分布式追踪）
+			// Prioritize traceId from headers (supports distributed tracing)
 			const incomingTraceId = req.headers[TRACE_ID_HEADER] as
 				| string
 				| undefined;
@@ -104,13 +104,13 @@ export default async function createFastifyInstance() {
 	await fastify.register(alertPlugin);
 	await fastify.register(configPlugin);
 
-	// traceId 相关 hooks
+	// traceId related hooks
 	fastify.addHook("onRequest", async (request, _reply) => {
-		// 将 request.id 映射到 request.traceId，方便业务代码使用
+		// Map request.id to request.traceId for convenience in business code
 		request.traceId = request.id;
 
-		// 将 traceId 和 logger 存储到 AsyncLocalStorage 中
-		// 这样业务代码可以通过 getLogger() 获取带 traceId 的 logger
+		// Store traceId and logger in AsyncLocalStorage
+		// This allows business code to get a logger with traceId via getLogger()
 		traceStorage.enterWith({
 			traceId: request.traceId,
 			logger: request.log,
@@ -118,7 +118,7 @@ export default async function createFastifyInstance() {
 	});
 
 	fastify.addHook("onSend", async (request, reply) => {
-		// 在响应头中返回 trace id
+		// Return trace id in response headers
 		reply.header(TRACE_ID_HEADER, request.traceId);
 	});
 
@@ -128,13 +128,13 @@ export default async function createFastifyInstance() {
 	fastify.setErrorHandler((error, _request, reply) => {
 		fastify.log.error(error, `[GLOBAL]: Request failed: ${error.message}`);
 		let code = error?.statusCode || 500;
-		// 手动设置了相应的status code
+		// Manually set status code
 		if (reply.statusCode !== 200) {
 			code = reply.statusCode;
 		}
 		// Here we would send alerts to Sentry/PagerDuty etc.
 		reply.send(error);
-		// 非调试模式且是500错误
+		// Non-debug mode and status code >= 500
 		if (!isDebugMode() && code >= 500) {
 			fastify.alert(
 				JSON.stringify({

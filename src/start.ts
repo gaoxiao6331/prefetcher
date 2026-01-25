@@ -28,11 +28,11 @@ export const start = async (params: StartParams) => {
 		process.exit(1);
 	}
 
-	// 捕获终止信号（如 Ctrl+C）
+	// Capture termination signals (e.g., Ctrl+C)
 	process.on("SIGTERM", async () => {
 		fastify.log.info("shutting down gracefully...");
 		try {
-			await fastify.close(); // Fastify 会等待现有请求处理完毕后再关闭
+			await fastify.close(); // Fastify will wait for existing requests to finish before closing
 			fastify.log.info("Server shut down gracefully");
 			process.exit(0);
 		} catch (error) {
@@ -48,7 +48,7 @@ export const start = async (params: StartParams) => {
 		}
 	});
 
-	// 捕获未处理的异常
+	// Capture uncaught exceptions
 	process.on("uncaughtException", (error) => {
 		fastify.log.error(error, "Uncaught Exception occurred");
 		if (!isDebugMode()) {

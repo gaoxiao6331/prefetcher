@@ -1,10 +1,10 @@
 const { pathsToModuleNameMapper } = require('ts-jest');
-const { compilerOptions } = require('./tsconfig.json'); // 确保引入了 tsconfig
+const { compilerOptions } = require('./tsconfig.json'); // Ensure tsconfig is imported
 
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  
+
   roots: ['<rootDir>/src'],
 
   collectCoverage: true,

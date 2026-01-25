@@ -13,16 +13,16 @@ interface MessageConfig {
 
 type MessageType = "info" | "warn" | "error";
 
-// 使用这个服务前需要配置飞书webhook token
+// Feishu webhook token needs to be configured before using this service
 class LarkWebhookBotService implements NotifierService {
-	private constructor(private fastify: FastifyInstance) {}
+	private constructor(private fastify: FastifyInstance) { }
 
 	static async create(fastify: FastifyInstance) {
 		return new LarkWebhookBotService(fastify);
 	}
 
 	/**
-	 * 获取 logger，优先使用带 traceId 的 logger
+	 * Get logger, prioritized to use the one with traceId
 	 */
 	private get log() {
 		return getLogger() ?? this.fastify.log;
@@ -36,17 +36,17 @@ class LarkWebhookBotService implements NotifierService {
 		const configMap: Record<MessageType, MessageConfig> = {
 			info: {
 				color: "green",
-				content: "通知",
+				content: "Notification",
 				extraElements: [],
 			},
 			warn: {
 				color: "yellow",
-				content: "⚠️警告⚠️",
+				content: "⚠️Warning⚠️",
 				extraElements: [],
 			},
 			error: {
 				color: "red",
-				content: "🚨警报🚨",
+				content: "🚨Alarm🚨",
 				extraElements: [
 					{
 						tag: "div",
@@ -125,12 +125,12 @@ class LarkWebhookBotService implements NotifierService {
 
 		const reqs = tokens.map((token) => sendWithRetry(token));
 
-		// 等待所有请求完成，无论成功还是失败
+		// Wait for all requests to complete, regardless of success or failure
 		const results = await Promise.allSettled(reqs);
 
 		const success = results.every((result) => result.status === "fulfilled");
 		if (!success) {
-			// 出现错误抛出异常
+			// Throw exception if an error occurs
 			const tokenStr = JSON.stringify(tokens);
 			const logTokens = tokenStr;
 

@@ -10,7 +10,7 @@ const execPromise = promisify(exec);
 import { getLogger } from "@/utils/trace-context";
 import type { CdnUpdaterService } from "./type";
 
-// 使用这个服务前需要配置github ssh
+// Configuring GitHub SSH is required before using this service
 class JsDelivrService implements CdnUpdaterService {
 	private readonly localPath: string;
 	private readonly remoteAddr: string;
@@ -35,7 +35,7 @@ class JsDelivrService implements CdnUpdaterService {
 	}
 
 	/**
-	 * 获取 logger，优先使用带 traceId 的 logger
+	 * Get logger, prioritized to use the one with traceId
 	 */
 	private get log() {
 		return getLogger() ?? this.fastify.log;
@@ -67,15 +67,15 @@ class JsDelivrService implements CdnUpdaterService {
 		return { namespace, projectName };
 	}
 
-	// 把content更新到localPath下的branchName分支，目录结构为localPath/fileName，并推送到远程仓库
+	// Update content to branchName under localPath. Directory structure: localPath/fileName. Push to remote repository.
 	async update(branchName: string, fileName: string, content: string) {
 		const localPath = this.localPath;
 		const remoteAddr = this.remoteAddr;
 
-		// 1. 检查localPath是否存在
+		// 1. Check if localPath exists
 		const resolvedLocalPath = path.resolve(localPath);
 		if (!fs.existsSync(resolvedLocalPath)) {
-			// 不存在从远程拉取
+			// Clone from remote if it doesn't exist
 			this.log.info(
 				`Local path "${resolvedLocalPath}" does not exist, cloning remote repository`,
 			);
@@ -88,7 +88,7 @@ class JsDelivrService implements CdnUpdaterService {
 		// Fetch latest info from remote
 		await execPromise(`cd "${resolvedLocalPath}" && git fetch origin`);
 
-		// 检查本地是否存在branchName分支，不存在创建去远程拉取，远程不存在则创建
+		// Check if branchName exists locally. Create and pull if not; create if it doesn't exist remotely.
 		try {
 			// Check if branch exists locally
 			await execPromise(
@@ -124,7 +124,7 @@ class JsDelivrService implements CdnUpdaterService {
 				);
 			} catch (_remoteError) {
 				// Branch doesn't exist remotely either, create it
-				// TODO 清空main分支，基于空白分支创建新分支
+				// TODO: Clear main branch, create a new branch based on a blank branch
 				this.log.info(`Branch "${branchName}" does not exist, creating it`);
 				await execPromise(
 					`cd "${resolvedLocalPath}" && git checkout -b "${branchName}"`,
@@ -134,7 +134,7 @@ class JsDelivrService implements CdnUpdaterService {
 
 		const resolvedFilePath = path.join(resolvedLocalPath, fileName);
 
-		// 检查文件是否存在
+		// Check if file exists
 		if (!fs.existsSync(resolvedFilePath)) {
 			fs.writeFileSync(resolvedFilePath, "");
 		}
@@ -148,7 +148,7 @@ class JsDelivrService implements CdnUpdaterService {
 		// Write the content to the file
 		fs.writeFileSync(resolvedFilePath, content);
 
-		// 5. 将content的内容写入文件，通过git 提交
+		// 5. Write content to file and commit via git
 		await this.gitAddCommitAndPush(
 			resolvedLocalPath,
 			resolvedFilePath,
@@ -158,7 +158,7 @@ class JsDelivrService implements CdnUpdaterService {
 		const { namespace, projectName } = this.parseRepoInfo(remoteAddr);
 
 		const relativeFilePath = path.relative(resolvedLocalPath, resolvedFilePath);
-		// 7. 手动刷新js delivr的cdn
+		// 7. Manually purge jsDelivr cache
 		await this.purgeJsDelivrCache(
 			namespace,
 			projectName,
@@ -226,7 +226,7 @@ class JsDelivrService implements CdnUpdaterService {
 
 		try {
 			const res = await axios.get(url, { timeout: 10000 });
-			// 检查返回的数据是否包含 finished
+			// Check if returning data contains 'finished'
 			const data =
 				typeof res.data === "string" ? res.data : JSON.stringify(res.data);
 			if (data.includes("finished") || res.data?.status === "finished") {

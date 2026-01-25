@@ -1,20 +1,20 @@
 /**
- * 信号量 (Semaphore) 用于控制并发任务的数量。
- * 常用于限制对稀缺资源（如数据库连接、无头浏览器实例）的访问，防止服务过载。
+ * Semaphore is used to control the number of concurrent tasks.
+ * Commonly used to limit access to scarce resources (e.g., database connections, headless browser instances) and prevent service overload.
  */
 export class Semaphore {
 	private tasks: (() => void)[] = [];
 	private count: number;
 
 	/**
-	 * @param max 最大并发许可数
+	 * @param max Maximum number of concurrent permits
 	 */
 	constructor(readonly max: number) {
 		this.count = max;
 	}
 
 	/**
-	 * 获取一个许可。如果没有可用许可，则进入等待队列。
+	 * Acquires a permit. If no permit is available, it enters the waiting queue.
 	 */
 	async acquire(): Promise<void> {
 		if (this.count > 0) {
@@ -28,7 +28,7 @@ export class Semaphore {
 	}
 
 	/**
-	 * 释放一个许可，唤醒等待队列中的下一个任务（如果有）。
+	 * Releases a permit, waking up the next task in the waiting queue (if any).
 	 */
 	release(): void {
 		if (this.tasks.length > 0) {
@@ -40,9 +40,9 @@ export class Semaphore {
 	}
 
 	/**
-	 * 执行一个异步函数，自动管理许可的获取与释放。
-	 * @param fn 要执行的异步函数
-	 * @returns 函数的返回结果
+	 * Executes an asynchronous function, automatically managing the acquisition and release of permits.
+	 * @param fn The asynchronous function to execute
+	 * @returns The result returned by the function
 	 */
 	async run<T>(fn: () => Promise<T>): Promise<T> {
 		await this.acquire();

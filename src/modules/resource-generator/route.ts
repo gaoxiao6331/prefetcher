@@ -31,7 +31,7 @@ const sniffRoutes: FastifyPluginAsync = async (fastify, _opts) => {
 				content,
 			);
 			if (notifications) {
-				// 检查内容是否更新 因为cdn刷新延时，改成延时校验
+				// Check if content is updated. Due to CDN refresh delay, switched to delayed validation
 				setTimeout(async () => {
 					try {
 						const res = await cdnUpdaterService.verifyContentUpdate(
@@ -40,12 +40,12 @@ const sniffRoutes: FastifyPluginAsync = async (fastify, _opts) => {
 						);
 						if (res) {
 							await notifierService.info(
-								`CDN更新成功！\n${url}`,
+								`CDN updated successfully!\n${url}`,
 								notifications,
 							);
 						} else {
 							await notifierService.error(
-								`CDN更新校验失败！\ntrace-id:${request.traceId}\n${url}`,
+								`CDN update verification failed!\ntrace-id:${request.traceId}\n${url}`,
 								notifications,
 							);
 						}

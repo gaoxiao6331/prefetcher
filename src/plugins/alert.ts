@@ -13,7 +13,7 @@ const alertPlugin: FastifyPluginAsync = async (fastify) => {
 				fastify.log.warn("NO LARK BOT TOKENS");
 			}
 		} catch (error) {
-			// 报警出错就没必要继续处理了，否则会进入死循环
+			// If an error occurs during alerting, there's no need to continue processing; otherwise, it would lead to an infinite loop
 			fastify.log.error(error, "Error sending alert");
 		}
 	});
