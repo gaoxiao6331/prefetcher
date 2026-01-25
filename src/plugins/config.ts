@@ -5,6 +5,8 @@ import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 import type { Config } from "@/config/type";
 import { env } from "@/env";
+import path from "node:path";
+import { isTsNode } from "@/utils/is";
 
 declare module "fastify" {
 	interface FastifyInstance {
@@ -13,13 +15,30 @@ declare module "fastify" {
 }
 
 export default fp(async function configPlugin(fastify: FastifyInstance) {
-	const configModule = await import(`@/config/file/${env}.ts`);
-	const config = configModule?.default;
-	if (!config) {
-		console.log(
-			chalk.red(`Specified configuration file '${env}.ts' not found.`),
-		);
+
+	try {
+		const entryPath = process.argv[1];
+
+		const entryDir = path.dirname(entryPath);
+
+		const baseConfigPath = `${entryDir}/config/file/${env}`;
+
+		let configModule;
+
+		const configPath = isTsNode() ? `${baseConfigPath}.ts` : `${baseConfigPath}.js`;
+
+		configModule = await import(configPath);
+
+
+		const config = configModule?.default;
+
+		if (!config) {
+			throw new Error(`[Config Error]: Default export missing in '${env}' configuration.`);
+		}
+
+		fastify.decorate("config", config);
+	} catch (err) {
+		fastify.log.error(err, "Failed to load config");
 		process.exit(-1);
 	}
-	fastify.decorate("config", config);
 });

@@ -22,7 +22,7 @@ export const start = async (params: StartParams) => {
 		const port = fastify.config.port ?? 3000;
 		const host = "0.0.0.0";
 		await fastify.listen({ port, host });
-		console.log(`Server listening on http://localhost:${port}`);
+		fastify.log.info(`Server listening on http://localhost:${port}`);
 	} catch (err) {
 		fastify.log.error(err);
 		process.exit(1);
