@@ -31,7 +31,12 @@ const server = http.createServer(async (req, res) => {
     if (url === '/' || url === '/a' || url === '/a/') {
         url = '/a/index.html';
     } else if (url === '/b' || url === '/b/') {
-        url = '/b/index.html';
+        // 使用 Rsbuild 构建产物作为入口
+        url = '/b/dist/index.html';
+    } else if (url.startsWith('/assets/')) {
+        // 将根路径下的 /assets/* 重写到 Site B 的构建目录下
+        // 因为 Rsbuild 生成的 index.html 使用了绝对路径 /assets/...，需要映射到 /b/dist/assets/...
+        url = '/b/dist' + url;
     }
 
     const filePath = path.join(__dirname, url);
@@ -90,7 +95,7 @@ server.listen(PORT, () => {
 ║    http://localhost:${PORT}/a/                               ║
 ║                                                            ║
 ║  Site A (启用 Prefetch):                                   ║
-║    http://localhost:${PORT}/a/?prefetch=/https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@ex/ex-res3.js    ║
+║    http://localhost:${PORT}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@ex/ex-res3.js    ║
 ║                                                            ║
 ║  Site B:                                                   ║
 ║    http://localhost:${PORT}/b/                               ║
