@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Site A - Prefetch 测试</title>
+    <title>Site A - Prefetch Test</title>
     <style>
         * {
             margin: 0;
@@ -250,14 +250,14 @@
 
 <body>
     <div class="container">
-        <h1>🚀 Site A - Prefetch 性能测试</h1>
-        <p class="subtitle">通过 URL 参数控制 prefetch 能力，验证资源预加载对性能的影响</p>
+        <h1>🚀 Site A - Prefetch Performance Test</h1>
+        <p class="subtitle">Control prefetch capabilities via URL parameters to verify the impact of resource preloading on performance</p>
 
         <div class="control-panel">
-            <h2>⚙️ 控制面板</h2>
+            <h2>⚙️ Control Panel</h2>
 
             <div class="url-info">
-                当前URL: <strong id="currentUrl"></strong>
+                Current URL: <strong id="currentUrl"></strong>
             </div>
 
             <div class="prefetch-status" id="prefetchStatus"></div>
@@ -265,44 +265,44 @@
             <div class="btn-group">
                 <a href="/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@examples/ex-res.js"
                     class="btn btn-primary" id="enablePrefetchBtn">
-                    ✅ 启用 Prefetch 模式
+                    ✅ Enable Prefetch Mode
                 </a>
                 <a href="/a/" class="btn btn-secondary" id="disablePrefetchBtn">
-                    ❌ 禁用 Prefetch 模式
+                    ❌ Disable Prefetch Mode
                 </a>
             </div>
 
             <div class="btn-group">
                 <a href="/b/" class="btn btn-primary" id="navigateBtn">
-                    🔗 访问 Site B
+                    🔗 Visit Site B
                 </a>
                 <button class="btn btn-secondary" id="clearHistoryBtn">
-                    📊 清除历史记录
+                    📊 Clear History
                 </button>
             </div>
 
             <div class="prefetch-list" id="prefetchListContainer" style="display: none;">
-                <strong>📦 已预加载的资源:</strong>
+                <strong>📦 Prefetched Resources:</strong>
                 <ul id="prefetchListDisplay"></ul>
             </div>
         </div>
 
         <div class="metrics-panel">
-            <h2>📊 性能指标对比</h2>
+            <h2>📊 Performance Metrics Comparison</h2>
 
             <div class="metrics-grid">
                 <div class="metric-card">
-                    <div class="label">Prefetch 平均 LCP</div>
+                    <div class="label">Prefetch Avg LCP</div>
                     <div class="value" id="prefetchAvgLCP">--</div>
                     <div class="unit">ms</div>
                 </div>
                 <div class="metric-card">
-                    <div class="label">普通模式平均 LCP</div>
+                    <div class="label">Normal Mode Avg LCP</div>
                     <div class="value" id="normalAvgLCP">--</div>
                     <div class="unit">ms</div>
                 </div>
                 <div class="metric-card">
-                    <div class="label">性能提升</div>
+                    <div class="label">Performance Improvement</div>
                     <div class="value" id="improvement">--</div>
                     <div class="unit">%</div>
                 </div>
@@ -311,17 +311,17 @@
             <table class="history-table" id="historyTable">
                 <thead>
                     <tr>
-                        <th>时间</th>
-                        <th>模式</th>
+                        <th>Time</th>
+                        <th>Mode</th>
                         <th>TTFB</th>
                         <th>FCP</th>
                         <th>LCP</th>
-                        <th>加载时间</th>
+                        <th>Load Time</th>
                     </tr>
                 </thead>
                 <tbody id="historyBody">
                     <tr>
-                        <td colspan="6" class="empty-state">暂无数据，请访问 Site B 后返回查看</td>
+                        <td colspan="6" class="empty-state">No data yet. Visit Site B and return to see the results.</td>
                     </tr>
                 </tbody>
             </table>
@@ -329,74 +329,74 @@
     </div>
 
     <script>
-        // 显示当前 URL
+        // Display current URL
         document.getElementById('currentUrl').textContent = location.href;
 
-        // 解析 URL 参数
+        // Parse URL parameters
         const urlParams = new URLSearchParams(location.search);
         const prefetchParam = urlParams.get('prefetch');
         const isPrefetchEnabled = !!prefetchParam;
 
-        // 更新状态显示
+        // Update status display
         const statusEl = document.getElementById('prefetchStatus');
         if (isPrefetchEnabled) {
             statusEl.className = 'prefetch-status enabled';
-            statusEl.innerHTML = `✅ Prefetch 已启用 - 正在加载 <code>${prefetchParam}</code>`;
+            statusEl.innerHTML = `✅ Prefetch enabled - loading <code>${prefetchParam}</code>`;
         } else {
             statusEl.className = 'prefetch-status disabled';
-            statusEl.innerHTML = '❌ Prefetch 未启用 - 添加 <code>?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@examples/ex-res.js</code> 参数启用';
+            statusEl.innerHTML = '❌ Prefetch disabled - add <code>?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@examples/ex-res.js</code> parameter to enable';
         }
 
-        // 记录导航模式
+        // Record navigation mode
         document.getElementById('navigateBtn').addEventListener('click', () => {
             sessionStorage.setItem('navigationMode', isPrefetchEnabled ? 'prefetch' : 'normal');
             sessionStorage.setItem('navigationTime', Date.now());
         });
 
-        // 如果有 prefetch 参数，加载 prefetch_list 文件
+        // If there is a prefetch parameter, load the prefetch_list file
         if (isPrefetchEnabled) {
             const script = document.createElement('script');
             script.src = prefetchParam;
             script.onload = () => {
-                console.log('[Site A] prefetch_list 已加载:', window.prefetch_list);
+                console.log('[Site A] prefetch_list loaded:', window.prefetch_list);
 
-                // 显示预加载列表
+                // Display prefetch list
                 if (window.prefetch_list && window.prefetch_list.length > 0) {
                     const container = document.getElementById('prefetchListContainer');
                     const listEl = document.getElementById('prefetchListDisplay');
                     container.style.display = 'block';
                     listEl.innerHTML = window.prefetch_list.map(url => `<li>${url}</li>`).join('');
 
-                    // 加载 prefetch.js 执行预加载
+                    // Load prefetch.js to execute preloading
                     const prefetchScript = document.createElement('script');
                     prefetchScript.src = '/prefetch.js';
                     prefetchScript.onload = () => {
-                        console.log('[Site A] prefetch.js 已执行，资源预加载完成');
+                        console.log('[Site A] prefetch.js executed, resource preloading complete');
                     };
                     document.head.appendChild(prefetchScript);
                 }
             };
             script.onerror = () => {
-                console.error('[Site A] 加载 prefetch_list 失败:', prefetchParam);
+                console.error('[Site A] Failed to load prefetch_list:', prefetchParam);
                 statusEl.className = 'prefetch-status disabled';
-                statusEl.innerHTML = `❌ 加载失败: ${prefetchParam}`;
+                statusEl.innerHTML = `❌ Load failed: ${prefetchParam}`;
             };
             document.head.appendChild(script);
         }
 
-        // 清除历史记录
+        // Clear history
         document.getElementById('clearHistoryBtn').addEventListener('click', () => {
             localStorage.removeItem('performanceHistory');
             renderHistory();
         });
 
-        // 渲染历史记录
+        // Render history
         function renderHistory() {
             const history = JSON.parse(localStorage.getItem('performanceHistory') || '[]');
             const tbody = document.getElementById('historyBody');
 
             if (history.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无数据，请访问 Site B 后返回查看</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No data yet. Visit Site B and return to see the results.</td></tr>';
                 document.getElementById('prefetchAvgLCP').textContent = '--';
                 document.getElementById('normalAvgLCP').textContent = '--';
                 document.getElementById('improvement').textContent = '--';
@@ -408,7 +408,7 @@
                     <td>${new Date(item.timestamp).toLocaleTimeString()}</td>
                     <td>
                         <span class="tag ${item.mode === 'prefetch' ? 'tag-prefetch' : 'tag-normal'}">
-                            ${item.mode === 'prefetch' ? 'Prefetch' : '普通'}
+                            ${item.mode === 'prefetch' ? 'Prefetch' : 'Normal'}
                         </span>
                     </td>
                     <td>${item.ttfb?.toFixed(0) || '--'} ms</td>
@@ -418,7 +418,7 @@
                 </tr>
             `).join('');
 
-            // 计算平均值和性能提升
+            // Calculate average and performance improvement
             const prefetchItems = history.filter(h => h.mode === 'prefetch' && h.lcp);
             const normalItems = history.filter(h => h.mode === 'normal' && h.lcp);
 

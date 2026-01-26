@@ -10,8 +10,8 @@ function StatNumber({ label, endpoint, duration = 1200 }: { label: string; endpo
   useEffect(() => {
     let isMounted = true;
     (async () => {
-      const res = await Utils.mockFetch(endpoint, { baseDelay: 200, variance: 200 });
-      // 根据返回的数据类型和 label 决定目标值，保证为 number
+      const res = await Utils.mockFetch(endpoint, { baseDelay: 200 });
+      // Decide the target value based on the returned data type and label, ensuring it's a number
       const data: any = res.data;
       const target: number = typeof data === 'number' ? data : (data?.[label as keyof typeof data] ?? 0);
       const startValue = 0;
@@ -46,9 +46,9 @@ function Dashboard() {
     let alive = true;
     (async () => {
       const [chartRes, tableRes, notifRes] = await Promise.all([
-        Utils.mockFetch('/api/chart', { baseDelay: 300, variance: 150 }),
-        Utils.mockFetch('/api/table', { baseDelay: 350, variance: 150 }),
-        Utils.mockFetch('/api/notifications', { baseDelay: 250, variance: 120 }),
+        Utils.mockFetch('/api/chart', { baseDelay: 300 }),
+        Utils.mockFetch('/api/table', { baseDelay: 350 }),
+        Utils.mockFetch('/api/notifications', { baseDelay: 250 }),
       ]);
       if (!alive) return;
       setChartData(chartRes.data as number[]);
@@ -68,7 +68,7 @@ function Dashboard() {
   return (
     <section className="dashboard">
       <div className="card card-chart">
-        <h3>📈 数据图表</h3>
+        <h3>📈 Data Chart</h3>
         <div className="chart-placeholder">
           {chartData ? (
             <div>Chart: {chartData.join(', ')}</div>
@@ -78,7 +78,7 @@ function Dashboard() {
         </div>
       </div>
       <div className="card card-table">
-        <h3>📋 数据列表</h3>
+        <h3>📋 Data List</h3>
         <div className="table-placeholder">
           {tableData ? (
             <ul>
@@ -92,7 +92,7 @@ function Dashboard() {
         </div>
       </div>
       <div className="card card-notifications">
-        <h3>🔔 通知中心</h3>
+        <h3>🔔 Notification Center</h3>
         <div className="notifications-placeholder">
           {notifications ? (
             <ul>
@@ -182,20 +182,20 @@ function PerfPanel() {
     history.unshift({ timestamp: Date.now(), mode, ...metrics });
     if (history.length > 20) history.pop();
     localStorage.setItem('performanceHistory', JSON.stringify(history));
-    alert('✅ 性能指标已保存！返回 Site A 查看对比数据');
+    alert('✅ Performance metrics saved! Return to Site A to see the comparison.');
   };
 
-  const items = ['TTFB', 'FCP', 'LCP', 'FID', 'CLS', '总加载时间'] as const;
+  const items = ['TTFB', 'FCP', 'LCP', 'FID', 'CLS', 'Total Load Time'] as const;
   const keys: (keyof typeof metrics)[] = ['ttfb', 'fcp', 'lcp', 'fid', 'cls', 'loadTime'];
 
   return (
     <section className="performance-panel">
-      <h2>⚡ 页面性能指标</h2>
+      <h2>⚡ Page Performance Metrics</h2>
       <div className="perf-grid">
         {items.map((label, i) => {
           const key = keys[i];
           const val = metrics[key];
-          const display = val === null ? '计算中...' : key === 'cls' ? (val as number).toFixed(3) : `${(val as number).toFixed(0)} ms`;
+          const display = val === null ? 'Calculating...' : key === 'cls' ? (val as number).toFixed(3) : `${(val as number).toFixed(0)} ms`;
           return (
             <div className="perf-item" key={String(key)}>
               <span className="perf-label">{label}</span>
@@ -204,7 +204,7 @@ function PerfPanel() {
           );
         })}
       </div>
-      <button className="save-btn" onClick={saveMetrics}>💾 保存到 Site A</button>
+      <button className="save-btn" onClick={saveMetrics}>💾 Save to Site A</button>
     </section>
   );
 }
@@ -235,12 +235,12 @@ function App() {
         <a
           className="back-btn"
           onClick={() => history.back()}
-        >← 返回 Site A</a>
+        >← Back to Site A</a>
       </nav>
       <main className="main-content">
         <section className="hero">
-          <h1>欢迎来到 Site B</h1>
-          <p className="hero-subtitle">这是一个复杂的页面，包含多个 JS/CSS 文件和模拟的 API 请求</p>
+          <h1>Welcome to Site B</h1>
+          <p className="hero-subtitle">This is a complex page with multiple JS/CSS files and simulated API requests</p>
           <div className="hero-stats">
             <StatNumber label="users" endpoint="/api/stats" duration={1500} />
             <StatNumber label="orders" endpoint="/api/stats" duration={1200} />
@@ -251,7 +251,7 @@ function App() {
         <PerfPanel />
       </main>
       <footer className="footer">
-        <p>Site B - Prefetch 性能测试页面</p>
+        <p>Site B - Prefetch Performance Test Page</p>
       </footer>
     </>
   );

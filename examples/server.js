@@ -1,6 +1,6 @@
 /**
- * 静态服务器 - 托管 Site A 和 Site B
- * 使用方法: node server.js
+ * Static server - to host Site A and Site B
+ * Usage: node server.js
  */
 
 const http = require('http');
@@ -19,30 +19,31 @@ const MIME_TYPES = {
     '.svg': 'image/svg+xml'
 };
 
-// 带波动的随机延迟
+// Random delay with variance
 function randomDelay(base = 50, variance = 30) {
     return base + (Math.random() - 0.5) * 2 * variance;
 }
 
 const server = http.createServer(async (req, res) => {
-    let url = req.url.split('?')[0]; // 移除查询参数
+    let url = req.url.split('?')[0]; // Remove query parameters
 
-    // 路由处理
+    // Route handling
     if (url === '/' || url === '/a' || url === '/a/') {
         url = '/a/index.html';
     } else if (url === '/b' || url === '/b/') {
-        // 使用 Rsbuild 构建产物作为入口
+        // Use Rsbuild's output as the entry point
         url = '/b/dist/index.html';
     } else if (url.startsWith('/assets/')) {
-        // 将根路径下的 /assets/* 重写到 Site B 的构建目录下
-        // 因为 Rsbuild 生成的 index.html 使用了绝对路径 /assets/...，需要映射到 /b/dist/assets/...
+        // Rewrite /assets/* from the root to Site B's build directory
+        // This is because Rsbuild's generated index.html uses absolute paths like /assets/...
+        // which need to be mapped to /b/dist/assets/...
         url = '/b/dist' + url;
     }
 
     const filePath = path.join(__dirname, url);
     const ext = path.extname(filePath);
 
-    // 检查文件是否存在
+    // Check if the file exists
     if (!fs.existsSync(filePath)) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('404 Not Found: ' + url);
@@ -50,32 +51,33 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // 模拟网络延迟（Site B 的 CSS 和 JS 文件添加固定延迟）
-    if (url.startsWith('/b/') && (ext === '.css' || ext === '.js')) {
-        const delay = 200; // 固定延迟 200ms
-        await new Promise(resolve => setTimeout(resolve, delay));
-        console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} (fixed delay: ${delay}ms)`);
-    } else {
-        console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    let delay = 200; // delay 200 ms for js
+    if (url.endsWith('css')) { // for css
+        delay = 100;
+    } else if(!url.endsWith('js')) { // for html and other files
+        delay = 50;        
     }
 
-    // 读取并返回文件
+    await new Promise(resolve => setTimeout(resolve, delay));
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} (fixed delay: ${delay}ms)`);
+
+    // Read and return the file
     try {
         const content = fs.readFileSync(filePath);
         const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-        // 如果是 Site B 的资源文件（JS/CSS），设置较长时间的缓存
-        // 这样 prefetch 到缓存后，后续访问 Site B 时才能命中缓存
-        if (url.startsWith('/b/') && (ext === '.css' || ext === '.js')) {
+        // For Site B's resource files (JS/CSS), set a longer cache duration.
+        // This ensures that after prefetching, subsequent visits to Site B will hit the cache.
+        if (ext === '.css' || ext === '.js') {
             res.writeHead(200, {
                 'Content-Type': contentType,
-                'Cache-Control': 'public, max-age=3600', // 缓存 1 小时
+                'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
                 'Access-Control-Allow-Origin': '*'
             });
         } else {
             res.writeHead(200, {
                 'Content-Type': contentType,
-                'Cache-Control': 'no-cache', // HTML 和其他文件不缓存
+                'Cache-Control': 'no-cache', // Do not cache HTML and other files
                 'Access-Control-Allow-Origin': '*'
             });
         }
@@ -89,24 +91,24 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
-║          Prefetch 测试服务器已启动                          ║
+║          Prefetch Test Server Started                       ║
 ╠═══════════════════════════════════════════════════════════╣
-║  Site A (无 Prefetch):                                     ║
+║  Site A (No Prefetch):                                     ║
 ║    http://localhost:${PORT}/a/                               ║
 ║                                                            ║
-║  Site A (启用 Prefetch):                                   ║
+║  Site A (Prefetch Enabled):                                ║
 ║    http://localhost:${PORT}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@examples/ex-res.js║
 ║                                                            ║
 ║  Site B:                                                   ║
 ║    http://localhost:${PORT}/b/                               ║
 ╠═══════════════════════════════════════════════════════════╣
-║  测试步骤:                                                  ║
-║  1. 访问 Site A (选择启用或禁用 Prefetch)                   ║
-║  2. 点击访问 Site B                                         ║
-║  3. 返回 Site A 查看性能对比                                ║
+║  Test Steps:                                               ║
+║  1. Visit Site A (with or without Prefetch)                ║
+║  2. Click to visit Site B                                  ║
+║  3. Return to Site A to see the performance comparison     ║
 ║                                                            ║
-║  自动化测试:                                                ║
-║    node examples/test-prefetch.js [测试次数]                ║
+║  Automated Test:                                           ║
+║    node examples/test-prefetch.js [number of tests]        ║
 ╚═══════════════════════════════════════════════════════════╝
     `);
 });

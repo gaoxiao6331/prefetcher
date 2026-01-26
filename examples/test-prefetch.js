@@ -1,14 +1,14 @@
 /**
- * 自动化测试脚本 - 测试 Prefetch 对性能的影响
- * 使用 Puppeteer 自动化浏览器进行测试
+ * Automated test script - to test the performance impact of Prefetch
+ * Uses Puppeteer to automate browser testing
  * 
- * 使用方法: node test-prefetch.js [测试次数]
+ * Usage: node test-prefetch.js [number of tests]
  */
 
 const puppeteer = require('puppeteer');
 
 const BASE_URL = 'http://localhost:3001';
-const TEST_ROUNDS = parseInt(process.argv[2]) || 5; // 默认每种模式测试5次
+const TEST_ROUNDS = parseInt(process.argv[2]) || 5; // Default to 5 tests per mode
 
 async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -20,17 +20,17 @@ async function getPerformanceMetrics(page) {
         const paintEntries = performance.getEntriesByType('paint');
         const fcp = paintEntries.find(e => e.name === 'first-contentful-paint');
 
-        // 获取 LCP
+        // Get LCP
         return new Promise(resolve => {
             let lcp = null;
 
-            // 尝试通过已有的 entries 获取
+            // Try to get LCP from existing entries
             const existingLCP = performance.getEntriesByType('largest-contentful-paint');
             if (existingLCP.length > 0) {
                 lcp = existingLCP[existingLCP.length - 1].startTime;
             }
 
-            // 同时开启监听（使用 buffered: true 获取之前的事件）
+            // Also start listening (use buffered: true to get previous events)
             const observer = new PerformanceObserver((list) => {
                 const entries = list.getEntries();
                 if (entries.length > 0) {
@@ -41,11 +41,11 @@ async function getPerformanceMetrics(page) {
             try {
                 observer.observe({ type: 'largest-contentful-paint', buffered: true });
             } catch (e) {
-                // 如果不支持 type 参数，回退到 entryTypes
+                // If the type parameter is not supported, fall back to entryTypes
                 observer.observe({ entryTypes: ['largest-contentful-paint'] });
             }
 
-            // 200ms 后返回结果，因为 buffered 模式通常很快就能拿到值
+            // Return the result after 200ms, as buffered mode usually gets the value quickly
             setTimeout(() => {
                 observer.disconnect();
                 resolve({
@@ -63,31 +63,31 @@ async function runTest(browser, withPrefetch) {
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
 
-    // 必须启用缓存，否则 prefetch 无法在后续加载中重用资源
-    await page.setCacheEnabled(true);
+    // Enable HTTP cache only for prefetch mode to avoid cross-round cache contamination
+    await page.setCacheEnabled(!!withPrefetch);
 
     try {
-        // 1. 访问 Site A
+        // 1. Visit Site A
         const siteAUrl = withPrefetch
             ? `${BASE_URL}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@examples/ex-res.js`
             : `${BASE_URL}/a/`;
 
-        await page.goto(siteAUrl, { waitUntil: 'networkidle0' });
+        await page.goto(siteAUrl, { waitUntil: 'networkidle2' });
 
-        // 2. 如果启用 prefetch，等待资源预加载完成
+        // 2. If prefetch is enabled, wait for resources to be preloaded
         if (withPrefetch) {
-            await sleep(2000); // 等待 prefetch 完成
+            await sleep(2000); // Wait for prefetch to complete
         }
 
-        // 3. 设置导航模式标记
+        // 3. Set navigation mode flag
         await page.evaluate((mode) => {
             sessionStorage.setItem('navigationMode', mode);
         }, withPrefetch ? 'prefetch' : 'normal');
 
-        // 4. 导航到 Site B
-        await page.goto(`${BASE_URL}/b/`, { waitUntil: 'networkidle0' });
+        // 4. Navigate to Site B
+        await page.goto(`${BASE_URL}/b/`, { waitUntil: 'networkidle2' });
 
-        // 5. 等待页面完全加载并收集性能指标
+        // 5. Wait for the page to fully load and collect performance metrics
         await sleep(1000);
         const metrics = await getPerformanceMetrics(page);
 
@@ -102,9 +102,9 @@ async function runTest(browser, withPrefetch) {
 
 async function main() {
     console.log('╔════════════════════════════════════════════════╗');
-    console.log('║       Prefetch 性能自动化测试                    ║');
+    console.log('║       Prefetch Performance Automation Test       ║');
     console.log('╠════════════════════════════════════════════════╣');
-    console.log(`║  每种模式测试次数: ${TEST_ROUNDS}                          ║`);
+    console.log(`║  Test rounds per mode: ${TEST_ROUNDS}                     ║`);
     console.log('╚════════════════════════════════════════════════╝');
     console.log('');
 
@@ -119,20 +119,20 @@ async function main() {
     };
 
     try {
-        // 交替测试，避免缓存影响
+        // Alternate tests to avoid cache impact
         for (let i = 0; i < TEST_ROUNDS; i++) {
-            console.log(`\n📊 第 ${i + 1}/${TEST_ROUNDS} 轮测试...`);
+            console.log(`\n📊 Running test round ${i + 1}/${TEST_ROUNDS}...`);
 
-            // 普通模式
-            console.log('  ├─ 测试普通模式...');
+            // Normal mode
+            console.log('  ├─ Testing Normal mode...');
             const normalResult = await runTest(browser, false);
             results.normal.push(normalResult);
             console.log(`  │  └─ LCP: ${normalResult.lcp?.toFixed(0) || 'N/A'} ms`);
 
             await sleep(1000);
 
-            // Prefetch 模式
-            console.log('  └─ 测试 Prefetch 模式...');
+            // Prefetch mode
+            console.log('  └─ Testing Prefetch mode...');
             const prefetchResult = await runTest(browser, true);
             results.prefetch.push(prefetchResult);
             console.log(`     └─ LCP: ${prefetchResult.lcp?.toFixed(0) || 'N/A'} ms`);
@@ -140,7 +140,7 @@ async function main() {
             await sleep(1000);
         }
 
-        // 计算统计数据
+        // Calculate stats
         const calcAvg = (arr, key) => {
             const valid = arr.filter(r => r[key] != null);
             return valid.length ? valid.reduce((a, b) => a + b[key], 0) / valid.length : null;
@@ -161,20 +161,20 @@ async function main() {
             }
         };
 
-        // 输出结果
+        // Output results
         console.log('\n╔════════════════════════════════════════════════╗');
-        console.log('║                  测试结果汇总                    ║');
+        console.log('║                 Test Results Summary               ║');
         console.log('╠════════════════════════════════════════════════╣');
-        console.log('│ 指标          │ Prefetch    │ 普通模式    │ 提升   │');
-        console.log('├───────────────┼─────────────┼─────────────┼────────┤');
+        console.log('│ Metric        │ Prefetch    │ Normal Mode │ Improvement │');
+        console.log('├───────────────┼─────────────┼─────────────┼─────────────┤');
 
         const formatRow = (label, prefetchVal, normalVal) => {
             const pStr = prefetchVal ? `${prefetchVal.toFixed(0)} ms`.padEnd(11) : 'N/A'.padEnd(11);
             const nStr = normalVal ? `${normalVal.toFixed(0)} ms`.padEnd(11) : 'N/A'.padEnd(11);
             const improvement = (prefetchVal && normalVal)
-                ? `${((normalVal - prefetchVal) / normalVal * 100).toFixed(1)}%`
-                : 'N/A';
-            console.log(`│ ${label.padEnd(13)} │ ${pStr} │ ${nStr} │ ${improvement.padEnd(6)} │`);
+                ? `${((normalVal - prefetchVal) / normalVal * 100).toFixed(1)}%`.padStart(10)
+                : 'N/A'.padStart(10);
+            console.log(`│ ${label.padEnd(13)} │ ${pStr} │ ${nStr} │ ${improvement} │`);
         };
 
         formatRow('TTFB', stats.prefetch.avgTTFB, stats.normal.avgTTFB);
@@ -184,14 +184,14 @@ async function main() {
 
         console.log('╚════════════════════════════════════════════════╝');
 
-        // 总结
+        // Summary
         if (stats.prefetch.avgLCP && stats.normal.avgLCP) {
             const lcpImprovement = (stats.normal.avgLCP - stats.prefetch.avgLCP) / stats.normal.avgLCP * 100;
             console.log('');
             if (lcpImprovement > 0) {
-                console.log(`✅ Prefetch 使 LCP 性能提升了 ${lcpImprovement.toFixed(1)}%`);
+                console.log(`✅ Prefetch improved LCP performance by ${lcpImprovement.toFixed(1)}%`);
             } else {
-                console.log(`⚠️  Prefetch 未带来明显性能提升 (${lcpImprovement.toFixed(1)}%)`);
+                console.log(`⚠️  Prefetch did not show significant performance improvement (${lcpImprovement.toFixed(1)}%)`);
             }
         }
 
