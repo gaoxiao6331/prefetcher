@@ -95,7 +95,7 @@ server.listen(PORT, () => {
 ║    http://localhost:${PORT}/a/                               ║
 ║                                                            ║
 ║  Site A (启用 Prefetch):                                   ║
-║    http://localhost:${PORT}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@ex/ex-res3.js    ║
+║    http://localhost:${PORT}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@examples/ex-res.js║
 ║                                                            ║
 ║  Site B:                                                   ║
 ║    http://localhost:${PORT}/b/                               ║

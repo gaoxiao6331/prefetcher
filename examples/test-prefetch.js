@@ -69,7 +69,7 @@ async function runTest(browser, withPrefetch) {
     try {
         // 1. 访问 Site A
         const siteAUrl = withPrefetch
-            ? `${BASE_URL}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@ex/ex-res3.js`
+            ? `${BASE_URL}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@examples/ex-res.js`
             : `${BASE_URL}/a/`;
 
         await page.goto(siteAUrl, { waitUntil: 'networkidle0' });
