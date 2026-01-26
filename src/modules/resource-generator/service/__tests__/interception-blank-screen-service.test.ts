@@ -21,6 +21,24 @@ function createMockFastify(): FastifyInstance {
 	} as unknown as FastifyInstance;
 }
 
+// Helper to setup mocked browser environment for screenshot fallback analysis
+const setupMockEnv = (canvasContext: any, _imageData: any) => {
+	(global as any).Image = class {
+		onload: any;
+		onerror: any;
+		set src(_val: string) {
+			setTimeout(() => this.onload?.(), 0);
+		}
+	};
+	(global as any).document = {
+		createElement: () => ({
+			getContext: () => canvasContext,
+			width: 100,
+			height: 100,
+		}),
+	};
+};
+
 describe("InterceptionBlankScreenService", () => {
 	let fastifyMock: FastifyInstance;
 	let service: InterceptionBlankScreenService;
@@ -91,8 +109,8 @@ describe("InterceptionBlankScreenService", () => {
 
 			// Mock isBlankScreen results: true for critical.js, false for non-critical.js
 			mockPage.evaluate
-				.mockResolvedValueOnce(true) // critical.js
-				.mockResolvedValueOnce(false); // non-critical.js
+				.mockResolvedValueOnce({ decided: true, blank: true }) // critical.js
+				.mockResolvedValueOnce({ decided: true, blank: false }); // non-critical.js
 
 			const result = await (service as any).filter(ctx);
 
@@ -245,7 +263,7 @@ describe("InterceptionBlankScreenService", () => {
 			expect(result.capturedResources).toHaveLength(1); // retained due to error
 			expect(fastifyMock.log.error).toHaveBeenCalledWith(
 				expect.any(Error),
-				"Screenshot-based blank screen detection failed",
+				"Blank screen detection failed",
 			);
 		});
 
@@ -267,89 +285,58 @@ describe("InterceptionBlankScreenService", () => {
 			};
 
 			// Mock browser environment for evaluate
-			// biome-ignore lint/suspicious/noExplicitAny: mock
-			const setupMockEnv = (canvasContext: any, _imageData: any) => {
-				// biome-ignore lint/suspicious/noExplicitAny: mock
-				(global as any).Image = class {
-					onload: any;
-					onerror: any;
-					set src(_val: string) {
-						setTimeout(() => this.onload(), 0);
-					}
-				};
-				(global as any).document = {
-					createElement: () => ({
-						getContext: () => canvasContext,
-						width: 50,
-						height: 50,
-					}),
-				};
-			};
-
-			// biome-ignore lint/suspicious/noExplicitAny: mock
-			const originalImage = (global as any).Image;
-			// biome-ignore lint/suspicious/noExplicitAny: mock
-			const originalDocument = (global as any).document;
-
-			try {
-				// biome-ignore lint/suspicious/noExplicitAny: mock
-				mockPage.evaluate.mockImplementation(
-					// biome-ignore lint/suspicious/noExplicitAny: mock
-					async (fn: any, ...args: any[]) => {
-						return await fn(...args);
-					},
-				);
-
-				// Branch 1: Canvas context is null
-				setupMockEnv(null, null);
-				let result = await (service as any).filter(ctx);
-				expect(result.capturedResources).toHaveLength(1); // true due to null ctx
-
-				// Branch 2: avgDiff < 8 (Result is true, blank screen)
-				const blankData = new Uint8ClampedArray(50 * 50 * 4).fill(0);
-				setupMockEnv(
-					{
-						drawImage: () => {},
-						getImageData: () => ({ data: blankData }),
-					},
-					blankData,
-				);
-				result = await (service as any).filter(ctx);
-				expect(result.capturedResources).toHaveLength(1);
-
-				// Branch 3: avgDiff >= 8 (Result is false, NOT blank screen)
-				const colorfulData = new Uint8ClampedArray(50 * 50 * 4);
-				for (let i = 0; i < colorfulData.length; i++) {
-					colorfulData[i] = i % 256;
+			let evalCall = 0;
+			mockPage.evaluate.mockImplementation(async (fn: any, ...args: any[]) => {
+				evalCall++;
+				// Odd calls: DOM-first evaluate -> return undecided to trigger screenshot fallback
+				if (evalCall % 2 === 1) {
+					return { decided: false, blank: true };
 				}
-				setupMockEnv(
-					{
-						drawImage: () => {},
-						getImageData: () => ({ data: colorfulData }),
-					},
-					colorfulData,
-				);
-				result = await (service as any).filter(ctx);
-				expect(result.capturedResources).toHaveLength(0);
-
-				// Branch 4: Image load failure
-				// biome-ignore lint/suspicious/noExplicitAny: mock
-				(global as any).Image = class {
-					onload: any;
-					onerror: any;
-					set src(_val: string) {
-						setTimeout(() => this.onerror(new Error("load fail")), 0);
-					}
-				};
-				// biome-ignore lint/suspicious/noExplicitAny: mock
-				result = await (service as any).filter(ctx);
-				expect(result.capturedResources).toHaveLength(1);
-			} finally {
-				// biome-ignore lint/suspicious/noExplicitAny: mock
-				(global as any).Image = originalImage;
-				// biome-ignore lint/suspicious/noExplicitAny: mock
-				(global as any).document = originalDocument;
+				// Even calls: screenshot analysis evaluate -> execute the provided function in mocked DOM
+				return await fn(...args);
+			});
+			// Branch 1: Canvas context is null -> treated as blank
+			setupMockEnv(null, null);
+			let result = await (service as any).filter(ctx);
+			expect(result.capturedResources).toHaveLength(1); // true due to null ctx
+			
+			// Branch 2: low variance and edges (blank)
+			const blankData = new Uint8ClampedArray(100 * 100 * 4).fill(128);
+			setupMockEnv(
+				{
+					drawImage: () => {},
+					getImageData: () => ({ data: blankData }),
+				},
+				blankData,
+			);
+			result = await (service as any).filter(ctx);
+			expect(result.capturedResources).toHaveLength(1);
+			
+			// Branch 3: high variance or edges (NOT blank)
+			const colorfulData = new Uint8ClampedArray(100 * 100 * 4);
+			for (let i = 0; i < colorfulData.length; i++) {
+				colorfulData[i] = (i * 13) % 256;
 			}
+			setupMockEnv(
+				{
+					drawImage: () => {},
+					getImageData: () => ({ data: colorfulData }),
+				},
+				colorfulData,
+			);
+			result = await (service as any).filter(ctx);
+			expect(result.capturedResources).toHaveLength(0);
+			
+			// Branch 4: Image load failure -> blank
+			(global as any).Image = class {
+				onload: any;
+				onerror: any;
+				set src(_val: string) {
+					setTimeout(() => this.onerror(new Error("load fail")), 0);
+				}
+			};
+			result = await (service as any).filter(ctx);
+			expect(result.capturedResources).toHaveLength(1);
 		});
 	});
 });
