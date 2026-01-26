@@ -19,10 +19,20 @@ export default defineConfig({
       js: 'js/[name].js',
       css: 'css/[name].css',
     },
+    minify: {
+      jsOptions: {
+        extractComments: false,
+        minimizerOptions: {
+          format: {
+            comments: false,
+          },
+        },
+      },
+    },
   },
   source: {
     entry: {
-      index: './src/index.tsx'
-    }
-  }
+      index: './src/index.tsx',
+    },
+  },
 });
