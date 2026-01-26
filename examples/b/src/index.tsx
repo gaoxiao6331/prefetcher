@@ -54,6 +54,13 @@ function Dashboard() {
       setChartData(chartRes.data as number[]);
       setTableData(tableRes.data as TableRow[]);
       setNotifications(notifRes.data as Notification[]);
+
+      // Lazy-load non-critical analytics when chart data is available
+      if (chartRes.data && Array.isArray(chartRes.data)) {
+        import('./nc-analytics').then(mod => {
+          mod.initAnalytics(chartRes.data as number[]);
+        }).catch(() => {});
+      }
     })();
     return () => { alive = false; };
   }, []);
@@ -203,6 +210,19 @@ function PerfPanel() {
 }
 
 function App() {
+  // Lazy-load non-critical helpers after initial paint
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      import('./nc-helpers').then(mod => {
+        mod.logEnvironment();
+        if (mod.supportsWebGL()) {
+          console.debug('[nc] WebGL supported; fancy format demo:', mod.fancyFormat('hello world from site b'));
+        }
+      }).catch(() => {});
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <>
       <nav className="navbar">
@@ -242,3 +262,6 @@ if (rootEl) {
   const root = createRoot(rootEl);
   root.render(<App />);
 }
+
+
+// Remove trailing lazy-load code placed outside of component (moved into App)
