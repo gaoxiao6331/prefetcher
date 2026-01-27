@@ -49,12 +49,8 @@ describe("InterceptionBlankScreenService", () => {
 			isClosed: jest.fn().mockReturnValue(false),
 			close: jest.fn(),
 			screenshot: jest.fn().mockResolvedValue("mock-base64"),
-			evaluate: jest
-				.fn()
-				// biome-ignore lint/suspicious/noExplicitAny: mock
-				.mockImplementation(async (_fn: any, ..._args: any[]) => {
-					return false;
-				}),
+			evaluate: jest.fn().mockResolvedValue({ decided: false, blankRate: 50 }),
+
 		};
 
 		mockBrowser = {
