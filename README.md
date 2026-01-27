@@ -1,6 +1,6 @@
 # Prefetcher
 
-[中文文档](./README_zh.md) | English
+[中文](./docs/README_zh.md) | English
 
 A resource prefetching service built with Fastify and TypeScript. Captures web page resources to generate core resource lists, uploads them to CDN for other sites to use with Prefetch, and optionally sends notifications.
 

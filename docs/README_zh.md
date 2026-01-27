@@ -1,30 +1,16 @@
 # Prefetcher
 
-中文文档 | [English](./README.md)
+中文 | [English](../README.md)
 
-基于 Fastify 和 TypeScript 的资源预取服务。捕获网页资源并生成核心资源列表，上传到 CDN 供其他站点 Prefetch 使用，可选地发送通知。
+基于 Fastify 和 TypeScript 的资源预取服务。捕获网页资源并生成核心资源列表，上传到 CDN 供其他站点 Prefetch 使用，以此来减少跳转至该页面的加载时间。
 
 ## 🎯 项目目的
 
 通过以下方式帮助优化 Web 应用性能：
 
 1. 使用 Puppeteer 分析网页，捕获加载的资源
-2. 基于策略生成核心资源列表
-3. 通过 GitHub 上传资源列表到 jsDelivr CDN
-4. 通过飞书 webhook 发送部署通知（可选）
-
-**使用场景：**
-- 为 Web 应用生成 prefetch/preload 资源列表
-- 自动化 CDN 部署流程
-
-## ✨ 功能特性
-
-- 完整的 TypeScript 支持，使用 Zod 进行模式验证
-- 支持并发页面处理和速率限制
-- 请求追踪，使用唯一追踪 ID
-- Prometheus 指标端点
-- 飞书 webhook 通知，支持重试逻辑
-- 开发调试模式
+2. 基于策略生成核心资源列表，并上传至CDN
+3. 其他Web应用获取CDN资源，使用Prefetch预获取核心资源，减少跳转至该页面的加载时间
 
 ## 🚀 快速开始
 
@@ -154,9 +140,9 @@ curl -X POST http://localhost:3000/res_gen \
 ```
 src/
 ├── modules/
-│   ├── resource-generator/    # 使用 Puppeteer 捕获资源
-│   ├── cdn-updater/           # 管理 GitHub + jsDelivr 部署
-│   └── notifier/              # 发送飞书通知
+│   ├── resource-generator/    # 使用 Puppeteer 捕获资源，并分析核心资源
+│   ├── cdn-updater/           # 将资源上传至CDN，目前仅支持 GitHub + jsDelivr 部署
+│   └── notifier/              # 发送通知，目前仅支持飞书 webhook 通知
 ├── plugins/
 │   ├── config.ts             # 配置管理
 │   ├── monitor.ts            # Prometheus 指标
@@ -197,18 +183,21 @@ src/
 
 ## 🎯 核心资源选取策略
 
-目前实现了 3 种策略：
+目前实现了以下几种策略：
 
-### 1. ALL-JS 策略
+### 1. 全部JS（ALL-JS） 策略
 选择捕获的全部 JS 文件，按体积大小降序排序确定优先级。
 
-### 2. ALL-JS-CSS 策略
+### 2. 全部JS和CSS（ALL-JS-CSS） 策略
 选择捕获的 JS 和 CSS 文件，按体积大小降序排序确定优先级。
 
-### 3. INTERCEPTION & BLANK SCREEN DETECTION 策略
+### 3. 拦截&白屏检测（INTERCEPTION & BLANK SCREEN DETECTION）策略
 每次请求拦截一个文件的加载，判断是否会导致白屏，从而确定是否为关键资源，并按体积大小降序排序确定优先级。
 
-> **注意：** 当前代码实现的是 ALL-JS 策略。
+### 4.LCP影响评估（LCP Impact Evaluation）策略
+每次请求拦截一个文件的加载，判断是否会导致白屏，从而确定是否为关键资源，并按体积大小降序排序确定优先级。
+
+> **注意：** 实际使用的策略需要结合项目进行抉择，。
 
 ## 🧪 测试
 
@@ -220,7 +209,7 @@ pnpm test
 pnpm test -- path/to/test.ts
 ```
 
-项目测试覆盖率为 **100%**。
+项目测试覆盖率为 **100%** (大部分测试用例为AI生成)。
 
 ## 📊 监控
 
@@ -239,3 +228,9 @@ pnpm dev:debug
 调试模式功能：
 - 显示浏览器窗口（非无头模式）
 - 启用详细日志输出
+
+## 😃 效果验证
+在examples目录下，存在两个Demo项目A和B，会测试从A跳转至B，prefetch和未prefetch的性能指标提升
+测试步骤
+node examples/server.js # 启动一个服务托管A、B项目的静态资源
+node test-prefetch.js 20 # 20是循环轮次，可不穿传，默认为5
