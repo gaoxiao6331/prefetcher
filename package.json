@@ -10,7 +10,7 @@
         "start": "node dist/index.js start",
         "clean": "rm -rf dist",
         "fix": "biome check --fix .",
-        "test": "cross-env NODE_ENV=development jest"
+        "test": "cross-env NODE_ENV=dev jest"
     },
     "keywords": [],
     "author": "",
