@@ -5,12 +5,22 @@ import InterceptionBlankScreenService from "../interception-blank-screen-service
 
 jest.mock("puppeteer");
 jest.mock("@/utils/trace-context", () => ({
-	// biome-ignore lint/suspicious/noExplicitAny: mock bind
 	bindAsyncContext: (fn: any) => fn,
 	getLogger: jest.fn().mockReturnValue(null),
 }));
+jest.mock("@/utils/semaphore", () => {
+	class MockSemaphore {
+		max: number;
+		constructor(max: number) {
+			this.max = max;
+		}
+		async run<T>(fn: () => Promise<T>): Promise<T> {
+			return fn();
+		}
+	}
+	return { Semaphore: MockSemaphore };
+});
 
-// Helper function to create mock Fastify instance
 function createMockFastify(): FastifyInstance {
 	return {
 		log: {
@@ -20,24 +30,6 @@ function createMockFastify(): FastifyInstance {
 		},
 	} as unknown as FastifyInstance;
 }
-
-// Helper to setup mocked browser environment for screenshot fallback analysis
-const setupMockEnv = (canvasContext: any, _imageData: any) => {
-	(global as any).Image = class {
-		onload: any;
-		onerror: any;
-		set src(_val: string) {
-			setTimeout(() => this.onload?.(), 0);
-		}
-	};
-	(global as any).document = {
-		createElement: () => ({
-			getContext: () => canvasContext,
-			width: 100,
-			height: 100,
-		}),
-	};
-};
 
 describe("InterceptionBlankScreenService", () => {
 	let fastifyMock: FastifyInstance;
@@ -81,7 +73,7 @@ describe("InterceptionBlankScreenService", () => {
 	});
 
 	describe("filter", () => {
-		test("should retain critical resources and remove non-critical ones", async () => {
+		test("should retain resource when blank screen is detected", async () => {
 			const resources: CapturedResource[] = [
 				{
 					url: "critical.js",
@@ -92,6 +84,25 @@ describe("InterceptionBlankScreenService", () => {
 					responseTime: 0,
 					durationMs: 0,
 				},
+			];
+			const ctx: GenerateContext = {
+				url: "http://test.com",
+				capturedResources: resources,
+			};
+
+			mockPage.evaluate.mockResolvedValue(true);
+
+			const result = await (service as any).filter(ctx);
+
+			expect(result.capturedResources).toHaveLength(1);
+			expect(result.capturedResources[0].url).toBe("critical.js");
+			expect(fastifyMock.log.info).toHaveBeenCalledWith(
+				expect.stringContaining("critical (causes blank screen)"),
+			);
+		});
+
+		test("should remove resource when screen is not blank", async () => {
+			const resources: CapturedResource[] = [
 				{
 					url: "non-critical.js",
 					type: "script",
@@ -107,15 +118,14 @@ describe("InterceptionBlankScreenService", () => {
 				capturedResources: resources,
 			};
 
-			// Mock isBlankScreen results: true for critical.js, false for non-critical.js
-			mockPage.evaluate
-				.mockResolvedValueOnce({ decided: true, blank: true }) // critical.js
-				.mockResolvedValueOnce({ decided: true, blank: false }); // non-critical.js
+			mockPage.evaluate.mockResolvedValue(false);
 
 			const result = await (service as any).filter(ctx);
 
-			expect(result.capturedResources).toHaveLength(1);
-			expect(result.capturedResources[0].url).toBe("critical.js");
+			expect(result.capturedResources).toHaveLength(0);
+			expect(fastifyMock.log.info).toHaveBeenCalledWith(
+				expect.stringContaining("is NOT critical"),
+			);
 		});
 
 		test("should handle request interception branches", async () => {
@@ -209,7 +219,7 @@ describe("InterceptionBlankScreenService", () => {
 			);
 		});
 
-		test("should handle validation failure and retain resource (safety first)", async () => {
+		test("should handle validation failure and retain resource", async () => {
 			const resources: CapturedResource[] = [
 				{
 					url: "fail.js",
@@ -240,103 +250,94 @@ describe("InterceptionBlankScreenService", () => {
 	});
 
 	describe("isBlankScreen", () => {
-		test("should return true if screenshot fails", async () => {
-			const resources: CapturedResource[] = [
-				{
-					url: "test.js",
-					type: "script",
-					status: 200,
-					sizeKB: 10,
-					requestTime: 0,
-					responseTime: 0,
-					durationMs: 0,
-				},
-			];
-			const ctx: GenerateContext = {
-				url: "http://test.com",
-				capturedResources: resources,
+		test("should return true when most points are blank containers", async () => {
+			const page = {
+				evaluate: jest.fn(async (fn: any) => {
+					const originalWindow = (global as any).window;
+					const originalDocument = (global as any).document;
+					(global as any).window = { innerWidth: 100, innerHeight: 100 };
+					const bodyEl = { matches: (sel: string) => sel === "body" };
+					(global as any).document = {
+						elementsFromPoint: () => [bodyEl],
+					};
+					try {
+						return fn();
+					} finally {
+						(global as any).window = originalWindow;
+						(global as any).document = originalDocument;
+					}
+				}),
 			};
 
-			mockPage.screenshot.mockRejectedValue(new Error("Screenshot crash"));
-
-			const result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(1); // retained due to error
-			expect(fastifyMock.log.error).toHaveBeenCalledWith(
-				expect.any(Error),
-				"Blank screen detection failed",
-			);
+			const result = await (service as any).isBlankScreen(page);
+			expect(result).toBe(true);
 		});
 
-		test("should exercise internal evaluate logic branches using mock environment", async () => {
-			const resources: CapturedResource[] = [
-				{
-					url: "test.js",
-					type: "script",
-					status: 200,
-					sizeKB: 10,
-					requestTime: 0,
-					responseTime: 0,
-					durationMs: 0,
-				},
-			];
-			const ctx: GenerateContext = {
-				url: "http://test.com",
-				capturedResources: resources,
+		test("should return false when points have non-blank content", async () => {
+			const page = {
+				evaluate: jest.fn(async (fn: any) => {
+					const originalWindow = (global as any).window;
+					const originalDocument = (global as any).document;
+					(global as any).window = { innerWidth: 100, innerHeight: 100 };
+					const contentEl = { matches: () => false };
+					(global as any).document = {
+						elementsFromPoint: () => [contentEl],
+					};
+					try {
+						return fn();
+					} finally {
+						(global as any).window = originalWindow;
+						(global as any).document = originalDocument;
+					}
+				}),
 			};
 
-			// Mock browser environment for evaluate
-			let evalCall = 0;
-			mockPage.evaluate.mockImplementation(async (fn: any, ...args: any[]) => {
-				evalCall++;
-				// Odd calls: DOM-first evaluate -> return undecided to trigger screenshot fallback
-				if (evalCall % 2 === 1) {
-					return { decided: false, blank: true };
-				}
-				// Even calls: screenshot analysis evaluate -> execute the provided function in mocked DOM
-				return await fn(...args);
-			});
-			// Branch 1: Canvas context is null -> treated as blank
-			setupMockEnv(null, null);
-			let result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(1); // true due to null ctx
-			
-			// Branch 2: low variance and edges (blank)
-			const blankData = new Uint8ClampedArray(100 * 100 * 4).fill(128);
-			setupMockEnv(
-				{
-					drawImage: () => {},
-					getImageData: () => ({ data: blankData }),
-				},
-				blankData,
-			);
-			result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(1);
-			
-			// Branch 3: high variance or edges (NOT blank)
-			const colorfulData = new Uint8ClampedArray(100 * 100 * 4);
-			for (let i = 0; i < colorfulData.length; i++) {
-				colorfulData[i] = (i * 13) % 256;
-			}
-			setupMockEnv(
-				{
-					drawImage: () => {},
-					getImageData: () => ({ data: colorfulData }),
-				},
-				colorfulData,
-			);
-			result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(0);
-			
-			// Branch 4: Image load failure -> blank
-			(global as any).Image = class {
-				onload: any;
-				onerror: any;
-				set src(_val: string) {
-					setTimeout(() => this.onerror(new Error("load fail")), 0);
-				}
+			const result = await (service as any).isBlankScreen(page);
+			expect(result).toBe(false);
+		});
+
+		test("should treat null nodes as blank", async () => {
+			const page = {
+				evaluate: jest.fn(async (fn: any) => {
+					const originalWindow = (global as any).window;
+					const originalDocument = (global as any).document;
+					(global as any).window = { innerWidth: 100, innerHeight: 100 };
+					(global as any).document = {
+						elementsFromPoint: () => [null],
+					};
+					try {
+						return fn();
+					} finally {
+						(global as any).window = originalWindow;
+						(global as any).document = originalDocument;
+					}
+				}),
 			};
-			result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(1);
+
+			const result = await (service as any).isBlankScreen(page);
+			expect(result).toBe(true);
+		});
+
+		test("should handle case where no elements are found", async () => {
+			const page = {
+				evaluate: jest.fn(async (fn: any) => {
+					const originalWindow = (global as any).window;
+					const originalDocument = (global as any).document;
+					(global as any).window = { innerWidth: 100, innerHeight: 100 };
+					(global as any).document = {
+						elementsFromPoint: () => [],
+					};
+					try {
+						return fn();
+					} finally {
+						(global as any).window = originalWindow;
+						(global as any).document = originalDocument;
+					}
+				}),
+			};
+
+			const result = await (service as any).isBlankScreen(page);
+			expect(result).toBe(false);
 		});
 	});
 });
