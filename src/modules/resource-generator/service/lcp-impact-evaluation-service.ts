@@ -4,6 +4,7 @@ import type { CapturedResource, GenerateContext } from "../type";
 import AllJsService from "./all-js-service";
 
 export function _evaluateLcpInBrowserContext(): number | null {
+	console.log("Executing _evaluateLcpInBrowserContext");
 	const value = (window as any).__prefetcherLcp;
 	if (typeof value === "number" && !Number.isNaN(value)) {
 		return value as number;
@@ -117,6 +118,7 @@ class LcpImpactEvaluationService extends AllJsService {
 		const page = pageObj.page as Page;
 
 		if (delayResourceUrl) {
+			await page.setRequestInterception(true);
 			this.setupDelayInterception(page, delayResourceUrl);
 		}
 
@@ -144,7 +146,9 @@ class LcpImpactEvaluationService extends AllJsService {
 
 				if (req.url() === resourceUrl) {
 					setTimeout(() => {
-						if (req.isInterceptResolutionHandled()) return;
+						if (req.isInterceptResolutionHandled()) {
+							return;
+						}
 						req.continue().catch((err: Error) => {
 						this.log.warn(`[LCP] Request handling failed: ${err.message}`);
 					});
@@ -172,23 +176,20 @@ class LcpImpactEvaluationService extends AllJsService {
 					}
 				});
 				observer.observe({ type: "largest-contentful-paint", buffered: true });
-				this.setupVisibilityChangeListener(observer);
+
+				window.addEventListener(
+					"visibilitychange",
+					() => {
+						if (document.visibilityState === "hidden") {
+							observer.disconnect();
+						}
+					},
+					{ once: true },
+				);
 			} catch (error) {
 				(window as any).__prefetcherLcpError = error;
 			}
 		});
-	}
-
-	private setupVisibilityChangeListener(observer: PerformanceObserver) {
-		window.addEventListener(
-			"visibilitychange",
-			() => {
-				if (document.visibilityState === "hidden") {
-					observer.disconnect();
-				}
-			},
-			{ once: true },
-		);
 	}
 }
 
