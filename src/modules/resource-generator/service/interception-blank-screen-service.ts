@@ -7,7 +7,9 @@ class InterceptionBlankScreenService extends AllJsService {
 	protected override async filter(
 		ctx: GenerateContext,
 	): Promise<GenerateContext & { validationResults: boolean[] }> {
-		this.log.info(`[InterceptionBlankScreenService] filter method called for URL: ${ctx.url}`);
+		this.log.info(
+			`[InterceptionBlankScreenService] filter method called for URL: ${ctx.url}`,
+		);
 		// First filter and get all JS files
 		const baseCtx = await super.filter(ctx);
 		const resources = baseCtx.capturedResources;
@@ -18,29 +20,45 @@ class InterceptionBlankScreenService extends AllJsService {
 
 		const tasks = resources.map((resource: CapturedResource) =>
 			validationSemaphore.run(async () => {
-				this.log.info(`[InterceptionBlankScreenService] Validating resource: ${resource.url}`);
+				this.log.info(
+					`[InterceptionBlankScreenService] Validating resource: ${resource.url}`,
+				);
 				await using pageObj = await this.getPage();
 				const page = pageObj.page;
-				this.log.info(`[InterceptionBlankScreenService] Page object received in filter: ${page}`);
+				this.log.info(
+					`[InterceptionBlankScreenService] Page object received in filter: ${page}`,
+				);
 
 				// Intercept and block THIS specific resource
 				page.on("request", (req) => {
 					try {
-						this.log.info(`[InterceptionBlankScreenService] Request intercepted: ${req.url()}`);
+						this.log.info(
+							`[InterceptionBlankScreenService] Request intercepted: ${req.url()}`,
+						);
 						if (req.isInterceptResolutionHandled()) {
-							this.log.info(`[InterceptionBlankScreenService] Request already handled: ${req.url()}`);
+							this.log.info(
+								`[InterceptionBlankScreenService] Request already handled: ${req.url()}`,
+							);
 							return;
 						}
 
 						if (req.url() === resource.url) {
-							this.log.info(`[InterceptionBlankScreenService] Aborting critical resource: ${req.url()}`);
+							this.log.info(
+								`[InterceptionBlankScreenService] Aborting critical resource: ${req.url()}`,
+							);
 							req.abort().catch((err) => {
-								this.log.warn(`[Interception] Abort failed for ${req.url()}: ${err}`);
+								this.log.warn(
+									`[Interception] Abort failed for ${req.url()}: ${err}`,
+								);
 							});
 						} else {
-							this.log.info(`[InterceptionBlankScreenService] Continuing non-critical resource: ${req.url()}`);
+							this.log.info(
+								`[InterceptionBlankScreenService] Continuing non-critical resource: ${req.url()}`,
+							);
 							req.continue().catch((err) => {
-								this.log.warn(`[Interception] Continue failed for ${req.url()}: ${err}`);
+								this.log.warn(
+									`[Interception] Continue failed for ${req.url()}: ${err}`,
+								);
 							});
 						}
 					} catch (err) {
@@ -49,16 +67,22 @@ class InterceptionBlankScreenService extends AllJsService {
 				});
 
 				try {
-					this.log.info(`[InterceptionBlankScreenService] Calling page.goto for URL: ${ctx.url}`);
+					this.log.info(
+						`[InterceptionBlankScreenService] Calling page.goto for URL: ${ctx.url}`,
+					);
 					// Navigate and wait for content
 					await page.goto(ctx.url, {
 						waitUntil: "networkidle2",
 						timeout: 30000,
 					});
-					this.log.info(`[InterceptionBlankScreenService] page.goto completed for URL: ${ctx.url}`);
+					this.log.info(
+						`[InterceptionBlankScreenService] page.goto completed for URL: ${ctx.url}`,
+					);
 
 					const { blank } = await this.isBlankScreen(page);
-					this.log.info(`[InterceptionBlankScreenService] isBlankScreen result for ${ctx.url}: ${blank}`);
+					this.log.info(
+						`[InterceptionBlankScreenService] isBlankScreen result for ${ctx.url}: ${blank}`,
+					);
 					if (blank) {
 						this.log.info(
 							`[Interception] Resource ${resource.url} is critical (causes blank screen)`,
@@ -146,7 +170,9 @@ class InterceptionBlankScreenService extends AllJsService {
 	private async isBlankScreen(
 		page: Page,
 	): Promise<{ decided: boolean; blank: boolean }> {
-		const domAnalysisResult = await page.evaluate(InterceptionBlankScreenService._evaluateDomBlankScreen);
+		const domAnalysisResult = await page.evaluate(
+			InterceptionBlankScreenService._evaluateDomBlankScreen,
+		);
 		this.log.info(
 			`[Interception] isBlankScreen DOM analysis result: ${JSON.stringify(
 				domAnalysisResult,
@@ -166,7 +192,10 @@ class InterceptionBlankScreenService extends AllJsService {
 				screenshot,
 			);
 		} catch (error) {
-			this.log.error(error, "Blank screen detection failed during screenshot analysis");
+			this.log.error(
+				error,
+				"Blank screen detection failed during screenshot analysis",
+			);
 			return { decided: true, blank: true }; // If screenshot fails, treat as blank
 		}
 
@@ -176,7 +205,9 @@ class InterceptionBlankScreenService extends AllJsService {
 		return { decided: true, blank: blankRateFromScreenshot >= 90 };
 	}
 
-	private static _evaluateScreenshotBlankScreen(screenshot: string): Promise<number> {
+	private static _evaluateScreenshotBlankScreen(
+		screenshot: string,
+	): Promise<number> {
 		return new Promise((resolve) => {
 			const img = new Image();
 			img.onload = () => {
@@ -190,7 +221,12 @@ class InterceptionBlankScreenService extends AllJsService {
 				canvas.height = img.height;
 				ctx.drawImage(img, 0, 0);
 
-				const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+				const imageData = ctx.getImageData(
+					0,
+					0,
+					canvas.width,
+					canvas.height,
+				).data;
 
 				const threshold = 5;
 				let blankPixels = 0;

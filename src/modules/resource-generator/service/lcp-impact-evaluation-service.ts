@@ -150,8 +150,8 @@ class LcpImpactEvaluationService extends AllJsService {
 							return;
 						}
 						req.continue().catch((err: Error) => {
-						this.log.warn(`[LCP] Request handling failed: ${err.message}`);
-					});
+							this.log.warn(`[LCP] Request handling failed: ${err.message}`);
+						});
 					}, 10000);
 				} else {
 					req.continue().catch((err: Error) => {

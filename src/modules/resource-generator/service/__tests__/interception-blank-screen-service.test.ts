@@ -42,13 +42,18 @@ function createMockPageInstance(
 		evaluate:
 			evaluateMock ||
 			jest.fn().mockImplementation(async (fn: Function, ...args: any[]) => {
-				if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+				if (
+					fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+				) {
 					return {
 						decided: true,
 						blankRate: blankScreenResult ? 100 : 0,
 					};
 				}
-				if (fn === (InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen) {
+				if (
+					fn ===
+					(InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen
+				) {
 					return blankScreenResult ? 100 : 0;
 				}
 				console.log("mockPageInstance.evaluate called with unknown function");
@@ -101,7 +106,6 @@ describe("InterceptionBlankScreenService", () => {
 			close: jest.fn(),
 			screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			evaluate: jest.fn().mockResolvedValue({ decided: false, blankRate: 50 }),
-
 		};
 
 		mockBrowser = {
@@ -123,29 +127,31 @@ describe("InterceptionBlankScreenService", () => {
 		let getPageSpy: jest.SpyInstance;
 
 		beforeEach(() => {
-			getPageSpy = jest.spyOn(service as any, "getPage").mockImplementation(async () => {
-				console.log("[Test] getPageSpy mock called");
-				const mockPageInstance = createMockPageInstance(
-					true,
-					mockPage.evaluate,
-					mockPage.goto,
-				); // Default to blank screen detected
-				console.log("[Test] mockPageInstance created:", mockPageInstance);
-				// Reset mocks for each test to ensure isolation
-				mockPageInstance.evaluate.mockClear();
-				mockPageInstance.goto.mockClear();
-				mockPageInstance.on.mockClear();
-				mockPageInstance.setRequestInterception.mockClear();
-				mockPageInstance.isClosed.mockClear();
-				mockPageInstance.close.mockClear();
+			getPageSpy = jest
+				.spyOn(service as any, "getPage")
+				.mockImplementation(async () => {
+					console.log("[Test] getPageSpy mock called");
+					const mockPageInstance = createMockPageInstance(
+						true,
+						mockPage.evaluate,
+						mockPage.goto,
+					); // Default to blank screen detected
+					console.log("[Test] mockPageInstance created:", mockPageInstance);
+					// Reset mocks for each test to ensure isolation
+					mockPageInstance.evaluate.mockClear();
+					mockPageInstance.goto.mockClear();
+					mockPageInstance.on.mockClear();
+					mockPageInstance.setRequestInterception.mockClear();
+					mockPageInstance.isClosed.mockClear();
+					mockPageInstance.close.mockClear();
 
-				return {
-					page: mockPageInstance,
-					async [Symbol.asyncDispose]() {
-						await mockPageInstance.close();
-					},
-				};
-			});
+					return {
+						page: mockPageInstance,
+						async [Symbol.asyncDispose]() {
+							await mockPageInstance.close();
+						},
+					};
+				});
 		});
 		test("should retain resource when blank screen is detected", async () => {
 			const resources: CapturedResource[] = [
@@ -165,7 +171,9 @@ describe("InterceptionBlankScreenService", () => {
 			};
 
 			const evaluateMock = jest.fn().mockImplementation((fn) => {
-				if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+				if (
+					fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+				) {
 					return { decided: true, blankRate: 100 };
 				}
 				return undefined;
@@ -209,7 +217,9 @@ describe("InterceptionBlankScreenService", () => {
 			};
 
 			const evaluateMock = jest.fn().mockImplementation((fn) => {
-				if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+				if (
+					fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+				) {
 					return { decided: true, blankRate: 0 };
 				}
 				return undefined;
@@ -253,7 +263,9 @@ describe("InterceptionBlankScreenService", () => {
 
 			let filterRequestHandler: any;
 			const evaluateMock = jest.fn().mockImplementation((fn) => {
-				if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+				if (
+					fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+				) {
 					return { decided: true, blankRate: 0 }; // Non-blank screen
 				}
 				return undefined;
@@ -261,14 +273,20 @@ describe("InterceptionBlankScreenService", () => {
 			const customGotoMock = jest.fn().mockResolvedValue(undefined); // Simply resolve goto
 
 			getPageSpy.mockImplementation(async () => {
-				const mockPageInstance = createMockPageInstance(false, evaluateMock, customGotoMock);
+				const mockPageInstance = createMockPageInstance(
+					false,
+					evaluateMock,
+					customGotoMock,
+				);
 				// The filter method will call page.on('request', handler).
 				// We need to capture that handler here.
-				mockPageInstance.on.mockImplementation((event: string, handler: any) => {
-					if (event === "request") {
-						filterRequestHandler = handler;
-					}
-				});
+				mockPageInstance.on.mockImplementation(
+					(event: string, handler: any) => {
+						if (event === "request") {
+							filterRequestHandler = handler;
+						}
+					},
+				);
 				return {
 					page: mockPageInstance,
 					async [Symbol.asyncDispose]() {
@@ -379,10 +397,16 @@ describe("InterceptionBlankScreenService", () => {
 				capturedResources: resources,
 			};
 
-			const customGotoMock = jest.fn().mockRejectedValue(new Error("Navigation failed"));
+			const customGotoMock = jest
+				.fn()
+				.mockRejectedValue(new Error("Navigation failed"));
 
 			getPageSpy.mockImplementation(async () => {
-				const mockPageInstance = createMockPageInstance(true, undefined, customGotoMock);
+				const mockPageInstance = createMockPageInstance(
+					true,
+					undefined,
+					customGotoMock,
+				);
 				return {
 					page: mockPageInstance,
 					async [Symbol.asyncDispose]() {
@@ -408,7 +432,10 @@ describe("InterceptionBlankScreenService", () => {
 		test("should return true when most points are blank containers", async () => {
 			const page = {
 				evaluate: jest.fn().mockImplementation((fn) => {
-					if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					) {
 						return { decided: true, blankRate: 100 };
 					}
 					return undefined;
@@ -423,7 +450,10 @@ describe("InterceptionBlankScreenService", () => {
 		test("should return false when points have non-blank content", async () => {
 			const page = {
 				evaluate: jest.fn().mockImplementation((fn) => {
-					if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					) {
 						return { decided: true, blankRate: 0 };
 					}
 					return undefined;
@@ -438,7 +468,10 @@ describe("InterceptionBlankScreenService", () => {
 		test("should treat null nodes as blank", async () => {
 			const page = {
 				evaluate: jest.fn().mockImplementation((fn) => {
-					if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					) {
 						return { decided: true, blankRate: 100 };
 					}
 					return undefined;
@@ -453,7 +486,10 @@ describe("InterceptionBlankScreenService", () => {
 		test("should handle case where no elements are found", async () => {
 			const page = {
 				evaluate: jest.fn().mockImplementation((fn) => {
-					if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					) {
 						return { decided: true, blankRate: 100 };
 					}
 					return undefined;
@@ -468,10 +504,17 @@ describe("InterceptionBlankScreenService", () => {
 		test("should return true if screenshot analysis fails due to no canvas context", async () => {
 			const page = {
 				evaluate: jest.fn().mockImplementation((fn) => {
-					if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					) {
 						return { decided: false, blankRate: 50 };
 					}
-					if (fn === (InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)
+							._evaluateScreenshotBlankScreen
+					) {
 						return 100;
 					}
 					return undefined;
@@ -487,10 +530,17 @@ describe("InterceptionBlankScreenService", () => {
 		test("should return true if screenshot analysis fails due to image loading error", async () => {
 			const page = {
 				evaluate: jest.fn().mockImplementation((fn) => {
-					if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					) {
 						return { decided: false, blankRate: 50 };
 					}
-					if (fn === (InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)
+							._evaluateScreenshotBlankScreen
+					) {
 						return 100;
 					}
 					return undefined;
@@ -506,10 +556,17 @@ describe("InterceptionBlankScreenService", () => {
 		test("should use screenshot analysis if DOM analysis is undecided", async () => {
 			const page = {
 				evaluate: jest.fn().mockImplementation((fn) => {
-					if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					) {
 						return { decided: false, blankRate: 50 }; // DOM analysis undecided
 					}
-					if (fn === (InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)
+							._evaluateScreenshotBlankScreen
+					) {
 						return 95; // Screenshot analysis result (95% blank)
 					}
 					return undefined;
@@ -525,7 +582,10 @@ describe("InterceptionBlankScreenService", () => {
 		test("should return true if screenshot analysis fails", async () => {
 			const page = {
 				evaluate: jest.fn().mockImplementation((fn) => {
-					if (fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen) {
+					if (
+						fn ===
+						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					) {
 						return { decided: false, blankRate: 50 }; // DOM analysis undecided
 					}
 					return undefined;
@@ -577,7 +637,9 @@ describe("InterceptionBlankScreenService static methods", () => {
 
 		test("should return decided: true and blankRate: 100 if no nodes are found", () => {
 			(document.elementsFromPoint as jest.Mock).mockReturnValue([]);
-			const result = (InterceptionBlankScreenService as any)._evaluateDomBlankScreen();
+			const result = (
+				InterceptionBlankScreenService as any
+			)._evaluateDomBlankScreen();
 			expect(result).toEqual({ decided: true, blankRate: 100 });
 		});
 
@@ -590,7 +652,9 @@ describe("InterceptionBlankScreenService static methods", () => {
 				mockElement("body"),
 				mockElement("#app"),
 			]);
-			const result = (InterceptionBlankScreenService as any)._evaluateDomBlankScreen();
+			const result = (
+				InterceptionBlankScreenService as any
+			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(true);
 			expect(result.blankRate).toBe(100);
 		});
@@ -603,21 +667,29 @@ describe("InterceptionBlankScreenService static methods", () => {
 				mockElement("div"),
 				mockElement("span"),
 			]);
-			const result = (InterceptionBlankScreenService as any)._evaluateDomBlankScreen();
+			const result = (
+				InterceptionBlankScreenService as any
+			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(true);
 			expect(result.blankRate).toBe(0);
 		});
 
 		test("should treat null or undefined nodes as blank", () => {
-			(document.elementsFromPoint as jest.Mock).mockReturnValue([null, undefined]);
-			const result = (InterceptionBlankScreenService as any)._evaluateDomBlankScreen();
+			(document.elementsFromPoint as jest.Mock).mockReturnValue([
+				null,
+				undefined,
+			]);
+			const result = (
+				InterceptionBlankScreenService as any
+			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(true);
 			expect(result.blankRate).toBe(100);
 		});
 
 		test("should return decided: false if blankRate is between 10 and 90", () => {
 			const mockElement = (isBlank: boolean) => ({
-				matches: (selector: string) => isBlank && (selector === "html" || selector === "body"),
+				matches: (selector: string) =>
+					isBlank && (selector === "html" || selector === "body"),
 			});
 			let callCount = 0;
 			(document.elementsFromPoint as jest.Mock).mockImplementation(() => {
@@ -628,7 +700,9 @@ describe("InterceptionBlankScreenService static methods", () => {
 					return [mockElement(false)];
 				}
 			});
-			const result = (InterceptionBlankScreenService as any)._evaluateDomBlankScreen();
+			const result = (
+				InterceptionBlankScreenService as any
+			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(false);
 			expect(result.blankRate).toBe(50);
 		});
@@ -642,7 +716,9 @@ describe("InterceptionBlankScreenService static methods", () => {
 		beforeEach(() => {
 			mockContext = {
 				drawImage: jest.fn(),
-				getImageData: jest.fn().mockReturnValue({ data: new Uint8ClampedArray(100 * 4) }), // 100 pixels
+				getImageData: jest
+					.fn()
+					.mockReturnValue({ data: new Uint8ClampedArray(100 * 4) }), // 100 pixels
 			};
 			mockCanvas = {
 				getContext: jest.fn().mockReturnValue(mockContext),
@@ -669,14 +745,18 @@ describe("InterceptionBlankScreenService static methods", () => {
 
 		test("should return 100 if canvas context is not available", async () => {
 			mockCanvas.getContext.mockReturnValue(null);
-			const promise = (InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen("mock-base64");
+			const promise = (
+				InterceptionBlankScreenService as any
+			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onload(); // Trigger onload
 			const result = await promise;
 			expect(result).toBe(100);
 		});
 
 		test("should return 100 if image fails to load", async () => {
-			const promise = (InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen("mock-base64");
+			const promise = (
+				InterceptionBlankScreenService as any
+			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onerror(); // Trigger onerror
 			const result = await promise;
 			expect(result).toBe(100);
@@ -693,7 +773,9 @@ describe("InterceptionBlankScreenService static methods", () => {
 			}
 			mockContext.getImageData.mockReturnValue({ data: imageData });
 
-			const promise = (InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen("mock-base64");
+			const promise = (
+				InterceptionBlankScreenService as any
+			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onload();
 			const result = await promise;
 			expect(result).toBe(100); // All pixels are within threshold of the first
@@ -713,7 +795,9 @@ describe("InterceptionBlankScreenService static methods", () => {
 			imageData[4 * 51] = 100; // Pixel 51 R
 			mockContext.getImageData.mockReturnValue({ data: imageData });
 
-			const promise = (InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen("mock-base64");
+			const promise = (
+				InterceptionBlankScreenService as any
+			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onload();
 			const result = await promise;
 			// Expect 98% blank (2 pixels are different)
@@ -734,7 +818,9 @@ describe("InterceptionBlankScreenService static methods", () => {
 			imageData[4 * 50 + 2] = 30;
 			mockContext.getImageData.mockReturnValue({ data: imageData });
 
-			const promise = (InterceptionBlankScreenService as any)._evaluateScreenshotBlankScreen("mock-base64");
+			const promise = (
+				InterceptionBlankScreenService as any
+			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onload();
 			const result = await promise;
 			expect(result).toBe(100); // Still 100% blank because it's within threshold
