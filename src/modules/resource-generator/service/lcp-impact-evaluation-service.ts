@@ -176,15 +176,19 @@ class LcpImpactEvaluationService extends AllJsService {
 		try {
 			await page.evaluateOnNewDocument(() => {
 				try {
-					// biome-ignore lint/suspicious/noExplicitAny: browser context
-					(window as any).__prefetcherLcp = null;
+					const win = window as unknown as {
+						__prefetcherLcp: number | null;
+						PerformanceObserver: typeof PerformanceObserver;
+						document: Document;
+					};
+					win.__prefetcherLcp = null;
 					const observer = new PerformanceObserver((entryList) => {
 						const entries = entryList.getEntries();
-						// biome-ignore lint/suspicious/noExplicitAny: browser context
-						const last = entries[entries.length - 1] as any;
+						const last = entries[entries.length - 1] as
+							| (PerformanceEntry & { startTime: number })
+							| undefined;
 						if (last && typeof last.startTime === "number") {
-							// biome-ignore lint/suspicious/noExplicitAny: browser context
-							(window as any).__prefetcherLcp = last.startTime;
+							win.__prefetcherLcp = last.startTime;
 						}
 					});
 					observer.observe({
@@ -202,8 +206,9 @@ class LcpImpactEvaluationService extends AllJsService {
 						{ once: true },
 					);
 				} catch (error) {
-					// biome-ignore lint/suspicious/noExplicitAny: browser context
-					(window as any).__prefetcherLcpError = error;
+					(
+						window as unknown as { __prefetcherLcpError: unknown }
+					).__prefetcherLcpError = error;
 				}
 			});
 		} catch (err) {

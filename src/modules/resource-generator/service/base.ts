@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import puppeteer, { type Browser } from "puppeteer";
+import puppeteer, {
+	type Browser,
+	type HTTPRequest,
+	type HTTPResponse,
+} from "puppeteer";
 import { PUPPETEER_EXECUTABLE_PATH } from "@/env";
 import { isDebugMode } from "@/utils/is";
 
@@ -27,13 +31,13 @@ abstract class BaseService implements ResourceGeneratorService {
 		return getLogger() ?? this.fastify.log;
 	}
 
-	static async create(
+	static async create<T extends BaseService>(
 		this: new (
 			fastify: FastifyInstance,
-		) => BaseService,
+		) => T,
 		fastify: FastifyInstance,
-	) {
-		// biome-ignore lint/complexity/noThisInStatic: biome bug
+	): Promise<T> {
+		// biome-ignore lint/complexity/noThisInStatic: factory method in abstract class
 		const service = new this(fastify);
 		await service.initBrowser();
 		return service;
@@ -142,7 +146,7 @@ abstract class BaseService implements ResourceGeneratorService {
 			// Use bindAsyncContext to bind context, ensuring getLogger() works properly in event callbacks
 			page.on(
 				"request",
-				bindAsyncContext((request) => {
+				bindAsyncContext((request: HTTPRequest) => {
 					try {
 						if (request.isInterceptResolutionHandled()) return;
 
@@ -178,7 +182,7 @@ abstract class BaseService implements ResourceGeneratorService {
 
 			page.on(
 				"response",
-				bindAsyncContext(async (response) => {
+				bindAsyncContext(async (response: HTTPResponse) => {
 					try {
 						const request = response.request();
 						if (request.method() !== "GET") return;

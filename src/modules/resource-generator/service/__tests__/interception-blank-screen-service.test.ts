@@ -5,8 +5,7 @@ import InterceptionBlankScreenService from "../interception-blank-screen-service
 
 jest.mock("puppeteer");
 jest.mock("@/utils/trace-context", () => ({
-	// biome-ignore lint/suspicious/noExplicitAny: generic function wrapper
-	bindAsyncContext: (fn: any) => fn,
+	bindAsyncContext: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
 	getLogger: jest.fn().mockReturnValue(null),
 }));
 jest.mock("@/utils/semaphore", () => {
@@ -65,8 +64,9 @@ type ServiceWithInternals = InterceptionBlankScreenService & {
 	filter: (
 		ctx: GenerateContext,
 	) => Promise<GenerateContext & { validationResults: boolean[] }>;
-	// biome-ignore lint/suspicious/noExplicitAny: test mock
-	isBlankScreen: (page: any) => Promise<{ decided: boolean; blank: boolean }>;
+	isBlankScreen: (
+		page: MockPage | unknown,
+	) => Promise<{ decided: boolean; blank: boolean }>;
 	_evaluateDomBlankScreen: () => { decided: boolean; blankRate: number };
 	_evaluateScreenshotBlankScreen: (screenshot: string) => Promise<number>;
 };
@@ -80,29 +80,32 @@ function createMockPageInstance(
 	const mockPageInstance: MockPage = {
 		evaluate:
 			evaluateMock ||
-			jest.fn().mockImplementation(
-				// biome-ignore lint/suspicious/noExplicitAny: complex mock implementation
-				async (fn: (...args: any[]) => any, ..._args: any[]) => {
-					if (
-						fn ===
-						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
-							._evaluateDomBlankScreen
-					) {
-						return {
-							decided: true,
-							blankRate: blankScreenResult ? 100 : 0,
-						};
-					}
-					if (
-						fn ===
-						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
-							._evaluateScreenshotBlankScreen
-					) {
-						return blankScreenResult ? 100 : 0;
-					}
-					return undefined;
-				},
-			),
+			jest
+				.fn()
+				.mockImplementation(
+					async (fn: (...args: unknown[]) => unknown, ..._args: unknown[]) => {
+						if (
+							fn ===
+							(
+								InterceptionBlankScreenService as unknown as ServiceWithInternals
+							)._evaluateDomBlankScreen
+						) {
+							return {
+								decided: true,
+								blankRate: blankScreenResult ? 100 : 0,
+							};
+						}
+						if (
+							fn ===
+							(
+								InterceptionBlankScreenService as unknown as ServiceWithInternals
+							)._evaluateScreenshotBlankScreen
+						) {
+							return blankScreenResult ? 100 : 0;
+						}
+						return undefined;
+					},
+				),
 		on: jest.fn((event, handler) => {
 			if (event === "request") {
 				requestHandler = handler;
@@ -310,8 +313,8 @@ describe("InterceptionBlankScreenService", () => {
 				capturedResources: resources,
 			};
 
-			// biome-ignore lint/suspicious/noExplicitAny: test mock
-			let filterRequestHandler: any;
+			let filterRequestHandler: (request: MockRequest) => Promise<void> =
+				undefined as unknown as (request: MockRequest) => Promise<void>;
 			const evaluateMock = jest.fn().mockImplementation((fn) => {
 				if (
 					fn ===
@@ -333,8 +336,7 @@ describe("InterceptionBlankScreenService", () => {
 				// The filter method will call page.on('request', handler).
 				// We need to capture that handler here.
 				mockPageInstance.on.mockImplementation(
-					// biome-ignore lint/suspicious/noExplicitAny: test mock
-					(event: string, handler: any) => {
+					(event: string, handler: (request: MockRequest) => Promise<void>) => {
 						if (event === "request") {
 							filterRequestHandler = handler;
 						}
@@ -359,33 +361,33 @@ describe("InterceptionBlankScreenService", () => {
 
 			// Case 1: Intercept resolution already handled
 			const mockReqHandled = {
-				isInterceptResolutionHandled: () => true,
-				url: () => "test.js",
+				isInterceptResolutionHandled: jest.fn().mockReturnValue(true),
+				url: jest.fn().mockReturnValue("test.js"),
 				abort: jest.fn(),
 				continue: jest.fn(),
-			};
+			} as unknown as MockRequest;
 			await filterRequestHandler(mockReqHandled);
 			expect(mockReqHandled.abort).not.toHaveBeenCalled();
 			expect(mockReqHandled.continue).not.toHaveBeenCalled();
 
 			// Case 2: URL matches resource - abort
 			const mockReqAbort = {
-				url: () => "test.js",
-				isInterceptResolutionHandled: () => false,
+				url: jest.fn().mockReturnValue("test.js"),
+				isInterceptResolutionHandled: jest.fn().mockReturnValue(false),
 				abort: jest.fn().mockResolvedValue(undefined),
 				continue: jest.fn(),
-			};
+			} as unknown as MockRequest;
 			await filterRequestHandler(mockReqAbort);
 			expect(mockReqAbort.abort).toHaveBeenCalled();
 			expect(mockReqAbort.continue).not.toHaveBeenCalled();
 
 			// Case 3: URL matches resource but abort fails
 			const mockReqAbortFail = {
-				url: () => "test.js",
-				isInterceptResolutionHandled: () => false,
+				url: jest.fn().mockReturnValue("test.js"),
+				isInterceptResolutionHandled: jest.fn().mockReturnValue(false),
 				abort: jest.fn().mockRejectedValue(new Error("Abort failed")),
 				continue: jest.fn(),
-			};
+			} as unknown as MockRequest;
 			await filterRequestHandler(mockReqAbortFail);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.stringContaining("Abort failed for test.js"),
@@ -393,22 +395,22 @@ describe("InterceptionBlankScreenService", () => {
 
 			// Case 4: URL does not match - continue
 			const mockReqContinue = {
-				url: () => "other.js",
-				isInterceptResolutionHandled: () => false,
+				url: jest.fn().mockReturnValue("other.js"),
+				isInterceptResolutionHandled: jest.fn().mockReturnValue(false),
 				continue: jest.fn().mockResolvedValue(undefined),
 				abort: jest.fn(),
-			};
+			} as unknown as MockRequest;
 			await filterRequestHandler(mockReqContinue);
 			expect(mockReqContinue.continue).toHaveBeenCalled();
 			expect(mockReqContinue.abort).not.toHaveBeenCalled();
 
 			// Case 5: URL does not match but continue fails
 			const mockReqContinueFail = {
-				url: () => "other.js",
-				isInterceptResolutionHandled: () => false,
+				url: jest.fn().mockReturnValue("other.js"),
+				isInterceptResolutionHandled: jest.fn().mockReturnValue(false),
 				continue: jest.fn().mockRejectedValue(new Error("Continue failed")),
 				abort: jest.fn(),
-			};
+			} as unknown as MockRequest;
 			await filterRequestHandler(mockReqContinueFail);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.stringContaining("Continue failed for other.js"),
@@ -419,10 +421,10 @@ describe("InterceptionBlankScreenService", () => {
 				url: jest.fn(() => {
 					throw new Error("Handler error");
 				}),
-				isInterceptResolutionHandled: () => false,
+				isInterceptResolutionHandled: jest.fn().mockReturnValue(false),
 				abort: jest.fn(),
 				continue: jest.fn(),
-			};
+			} as unknown as MockRequest;
 			await filterRequestHandler(mockReqError);
 			await Promise.resolve(); // Ensure microtasks are flushed for error handling
 			expect(mockReqError.url).toHaveBeenCalled();
@@ -690,10 +692,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 	});
 
 	afterAll(() => {
-		// biome-ignore lint/suspicious/noExplicitAny: test helper
-		global.window = originalWindow as any;
-		// biome-ignore lint/suspicious/noExplicitAny: test helper
-		global.document = originalDocument as any;
+		global.window = originalWindow as unknown as Window & typeof globalThis;
+		global.document = originalDocument as unknown as Document;
 	});
 
 	describe("_evaluateDomBlankScreen", () => {
@@ -783,14 +783,16 @@ describe("InterceptionBlankScreenService static methods", () => {
 
 		test("should handle missing document.elementsFromPoint", () => {
 			const original = document.elementsFromPoint;
-			// biome-ignore lint/suspicious/noExplicitAny: test environment setup
-			(document as any).elementsFromPoint = undefined;
+			(
+				document as unknown as { elementsFromPoint: unknown }
+			).elementsFromPoint = undefined;
 			const result = (
 				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(false);
-			// biome-ignore lint/suspicious/noExplicitAny: test environment cleanup
-			(document as any).elementsFromPoint = original;
+			(
+				document as unknown as { elementsFromPoint: unknown }
+			).elementsFromPoint = original;
 		});
 
 		test("should return decided: false if blankRate is between 10 and 90", () => {

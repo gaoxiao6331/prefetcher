@@ -12,8 +12,8 @@ function StatNumber({ label, endpoint, duration = 1200 }: { label: string; endpo
     (async () => {
       const res = await Utils.mockFetch(endpoint, { baseDelay: 200 });
       // Decide the target value based on the returned data type and label, ensuring it's a number
-      const data: any = res.data;
-      const target: number = typeof data === 'number' ? data : (data?.[label as keyof typeof data] ?? 0);
+      const data = res.data;
+      const target: number = typeof data === 'number' ? data : ((data as Record<string, number>)?.[label] ?? 0);
       const startValue = 0;
       const startTime = performance.now();
 
@@ -39,8 +39,8 @@ function StatNumber({ label, endpoint, duration = 1200 }: { label: string; endpo
 
 function Dashboard() {
   const [chartData, setChartData] = useState<number[] | null>(null);
-  const [tableData, setTableData] = useState<any[] | null>(null);
-  const [notifications, setNotifications] = useState<any[] | null>(null);
+  const [tableData, setTableData] = useState<TableRow[] | null>(null);
+  const [notifications, setNotifications] = useState<Notification[] | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -154,9 +154,12 @@ function PerfPanel() {
 
     let clsValue = 0;
     const clsObserver = new PerformanceObserver((entryList) => {
-      for (const entry of entryList.getEntries() as any) {
+      for (const entry of entryList.getEntries() as (PerformanceEntry & {
+        hadRecentInput?: boolean;
+        value?: number;
+      })[]) {
         if (!entry.hadRecentInput) {
-          clsValue += entry.value;
+          clsValue += entry.value ?? 0;
         }
       }
       perfMetrics.cls = clsValue;

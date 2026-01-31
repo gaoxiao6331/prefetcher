@@ -35,8 +35,7 @@ function createMockPage() {
 	};
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: complex mock type
-type MockPage = any;
+type MockPage = ReturnType<typeof createMockPage>;
 
 // Helper function to create mock browser
 function createMockBrowser(mockPage: MockPage) {
@@ -48,8 +47,23 @@ function createMockBrowser(mockPage: MockPage) {
 	};
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: complex mock type
-type MockBrowser = any;
+type MockBrowser = ReturnType<typeof createMockBrowser>;
+
+type ServiceWithInternals = {
+	browser: MockBrowser | null;
+	filter: (ctx: GenerateContext) => Promise<GenerateContext>;
+	measureLcp: (url: string) => Promise<number | null>;
+	measureLcpWithDelay: (
+		url: string,
+		delayResourceUrl: string,
+	) => Promise<number | null>;
+	measureLcpInternal: (
+		url: string,
+		delayResourceUrl?: string,
+	) => Promise<number | null>;
+	setupDelayInterception: (page: MockPage, resourceUrl: string) => void;
+	setupLcpObserver: (page: MockPage) => Promise<void>;
+};
 
 interface MockRequest {
 	isInterceptResolutionHandled: () => boolean;
@@ -87,8 +101,7 @@ describe("LcpImpactEvaluationService", () => {
 	beforeEach(async () => {
 		jest.clearAllMocks();
 		jest.resetModules();
-		// biome-ignore lint/suspicious/noExplicitAny: legacy timers require any in some jest versions
-		jest.useFakeTimers("legacy" as any);
+		jest.useFakeTimers();
 
 		mockPage = createMockPage();
 		mockBrowser = createMockBrowser(mockPage);
@@ -99,19 +112,24 @@ describe("LcpImpactEvaluationService", () => {
 		service = (await LcpImpactEvaluationService.create(
 			fastifyMock,
 		)) as LcpImpactEvaluationService;
-		// biome-ignore lint/suspicious/noExplicitAny: access private property for test
-		(service as any).browser = mockBrowser;
+		(service as unknown as ServiceWithInternals).browser = mockBrowser;
+		requestHandler = (mockPage.on as jest.Mock).mock.calls.find(
+			(call) => call[0] === "request",
+		)?.[1];
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		jest.useRealTimers();
+		(service as unknown as ServiceWithInternals).browser = null;
+		await service.close();
 	});
 
 	describe("_evaluateLcpInBrowserContext", () => {
-		// biome-ignore lint/suspicious/noExplicitAny: complex mock type
-		let mockWindow: any;
-		// biome-ignore lint/suspicious/noExplicitAny: complex mock type
-		let mockPerformance: any;
+		let mockWindow: {
+			performance: { getEntriesByType: jest.Mock };
+			__prefetcherLcp?: unknown;
+		};
+		let mockPerformance: { getEntriesByType: jest.Mock };
 
 		beforeEach(() => {
 			mockPerformance = {
@@ -122,17 +140,14 @@ describe("LcpImpactEvaluationService", () => {
 			};
 
 			// Setup global window for tests that use the exported function directly
-			// biome-ignore lint/suspicious/noExplicitAny: test environment setup
-			(global as any).window = mockWindow;
-			// biome-ignore lint/suspicious/noExplicitAny: test environment setup
-			(global as any).performance = mockPerformance;
+			(global as unknown as { window: unknown }).window = mockWindow;
+			(global as unknown as { performance: unknown }).performance =
+				mockPerformance;
 		});
 
 		afterEach(() => {
-			// biome-ignore lint/suspicious/noExplicitAny: test environment cleanup
-			delete (global as any).window;
-			// biome-ignore lint/suspicious/noExplicitAny: test environment cleanup
-			delete (global as any).performance;
+			delete (global as unknown as Record<string, unknown>).window;
+			delete (global as unknown as Record<string, unknown>).performance;
 		});
 
 		test("should return __prefetcherLcp value when available", () => {
@@ -180,8 +195,10 @@ describe("LcpImpactEvaluationService", () => {
 					}
 				},
 			);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			(service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
+			(service as unknown as ServiceWithInternals).setupDelayInterception(
+				mockPage,
+				TEST_RESOURCE_URL,
+			);
 		});
 
 		afterEach(() => {});
@@ -289,8 +306,10 @@ describe("LcpImpactEvaluationService", () => {
 					}
 				},
 			);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			(service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
+			(service as unknown as ServiceWithInternals).setupDelayInterception(
+				mockPage,
+				TEST_RESOURCE_URL,
+			);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.any(Error),
 				expect.stringContaining("[LCP] Failed to setup delay interception"),
@@ -343,8 +362,9 @@ describe("LcpImpactEvaluationService", () => {
 	describe("Initialization", () => {
 		test("should initialize service correctly", () => {
 			expect(service).toBeDefined();
-			// biome-ignore lint/suspicious/noExplicitAny: access protected property for test
-			expect((service as any).browser).toBeDefined();
+			expect(
+				(service as unknown as ServiceWithInternals).browser,
+			).toBeDefined();
 		});
 
 		test("should handle browser init failure", async () => {
@@ -376,19 +396,15 @@ describe("LcpImpactEvaluationService", () => {
 
 			// Mock measureLcpInternal instead of measureLcp to cover wrappers
 			const measureLcpInternalSpy = jest.spyOn(
-				service as unknown as {
-					measureLcpInternal: (
-						url: string,
-						delayResourceUrl?: string,
-					) => Promise<number | null>;
-				},
+				service as unknown as ServiceWithInternals,
 				"measureLcpInternal",
 			);
 			measureLcpInternalSpy.mockResolvedValueOnce(2000); // Baseline
 			measureLcpInternalSpy.mockResolvedValueOnce(3500); // Impacted
 
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const result = await (service as any).filter(ctx);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
 			expect(result.capturedResources).toHaveLength(1);
 			expect(result.capturedResources[0].url).toBe(TEST_RESOURCE_URL);
 			expect(measureLcpInternalSpy).toHaveBeenCalledTimes(2);
@@ -396,8 +412,9 @@ describe("LcpImpactEvaluationService", () => {
 
 		test("should handle page close failure", async () => {
 			mockPage.close.mockRejectedValueOnce(new Error("Close failed"));
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			await (service as any).measureLcpInternal(TEST_URL);
+			await (service as unknown as ServiceWithInternals).measureLcpInternal(
+				TEST_URL,
+			);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.any(Error),
 				"Failed to close page",
@@ -415,184 +432,135 @@ describe("LcpImpactEvaluationService", () => {
 	});
 
 	describe("filter", () => {
-		test("should return baseCtx if capturedResources is empty", async () => {
-			const ctx = createMockContext([]);
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(0);
+		test("should measure baseline LCP", async () => {
+			const measureLcpSpy = jest
+				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
+				.mockResolvedValue(1500);
+
+			const ctx = createMockContext([
+				{ url: TEST_RESOURCE_URL, type: "script" } as CapturedResource,
+			]);
+			await (service as unknown as ServiceWithInternals).filter(ctx);
+
+			expect(measureLcpSpy).toHaveBeenCalledWith(TEST_URL);
 		});
 
-		test("should log error if baselineLcp measurement fails", async () => {
-			const resources: CapturedResource[] = [
-				{
-					url: TEST_RESOURCE_URL,
-					type: "script",
-					status: 200,
-					sizeKB: 10,
-					requestTime: Date.now(),
-					responseTime: Date.now() + 50,
-					durationMs: 50,
-				},
+		test("should treat all resources as critical if baseline LCP fails", async () => {
+			const measureLcpSpy = jest
+				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
+				.mockResolvedValue(null);
+
+			const resources = [
+				{ url: TEST_RESOURCE_URL, type: "script" } as CapturedResource,
 			];
 			const ctx = createMockContext(resources);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
+
+			expect(result.capturedResources).toEqual(resources);
+			expect(measureLcpSpy).toHaveBeenCalled();
+		});
+
+		test("should evaluate resource impact and filter non-critical ones", async () => {
+			jest
+				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
+				.mockResolvedValue(1000);
+			const measureLcpWithDelaySpy = jest
+				.spyOn(
+					service as unknown as ServiceWithInternals,
+					"measureLcpWithDelay",
+				)
+				.mockImplementation(async (_url, resourceUrl) => {
+					if (resourceUrl === TEST_RESOURCE_URL) return 2500; // Delta = 1500 (> 1000)
+					return 1500; // Delta = 500 (< 1000)
+				});
+
+			const resources = [
+				{ url: TEST_RESOURCE_URL, type: "script" },
+				{ url: _TEST_RESOURCE_URL_2, type: "script" },
+			] as CapturedResource[];
+			const ctx = createMockContext(resources);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
+
+			expect(result.capturedResources).toHaveLength(1);
+			expect(result.capturedResources[0].url).toBe(TEST_RESOURCE_URL);
+			expect(measureLcpWithDelaySpy).toHaveBeenCalledTimes(2);
+		});
+
+		test("should treat resource as critical if its evaluation fails", async () => {
+			jest
+				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
+				.mockResolvedValue(1000);
 			jest
 				.spyOn(
-					service as unknown as {
-						measureLcpInternal: (
-							url: string,
-							delayResourceUrl?: string,
-						) => Promise<number | null>;
-					},
-					"measureLcpInternal",
+					service as unknown as ServiceWithInternals,
+					"measureLcpWithDelay",
 				)
-				.mockRejectedValueOnce(new Error("Measure failed"));
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			await (service as any).filter(ctx);
+				.mockResolvedValue(null);
+
+			const resources = [
+				{ url: TEST_RESOURCE_URL, type: "script" },
+			] as CapturedResource[];
+			const ctx = createMockContext(resources);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
+
+			expect(result.capturedResources).toHaveLength(1);
+		});
+
+		test("should treat resource as critical if error occurs during evaluation", async () => {
+			jest
+				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
+				.mockResolvedValue(1000);
+			jest
+				.spyOn(
+					service as unknown as ServiceWithInternals,
+					"measureLcpWithDelay",
+				)
+				.mockRejectedValue(new Error("Evaluation failed"));
+
+			const resources = [
+				{ url: TEST_RESOURCE_URL, type: "script" },
+			] as CapturedResource[];
+			const ctx = createMockContext(resources);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
+
+			expect(result.capturedResources).toHaveLength(1);
+		});
+
+		test("should return original context if no resources are captured", async () => {
+			const ctx = createMockContext([]);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
+			expect(result.capturedResources).toHaveLength(0);
+			expect(result.url).toBe(ctx.url);
+		});
+
+		test("should log error and proceed if baseline LCP measurement throws", async () => {
+			const measureLcpSpy = jest
+				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
+				.mockRejectedValue(new Error("Baseline failed"));
+
+			const resources = [
+				{ url: TEST_RESOURCE_URL, type: "script" } as CapturedResource,
+			];
+			const ctx = createMockContext(resources);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
+
+			expect(result.capturedResources).toEqual(resources);
+			expect(measureLcpSpy).toHaveBeenCalled();
 			expect(fastifyMock.log.error).toHaveBeenCalledWith(
 				expect.any(Error),
 				"[LCP] Failed to measure baseline LCP",
-			);
-		});
-
-		test("should return all resources as critical if baselineLcp is null", async () => {
-			const resources: CapturedResource[] = [
-				{
-					url: TEST_RESOURCE_URL,
-					type: "script",
-					status: 200,
-					sizeKB: 10,
-					requestTime: Date.now(),
-					responseTime: Date.now() + 50,
-					durationMs: 50,
-				},
-			];
-			const ctx = createMockContext(resources);
-			jest
-				.spyOn(
-					service as unknown as {
-						measureLcpInternal: (
-							url: string,
-							delayResourceUrl?: string,
-						) => Promise<number | null>;
-					},
-					"measureLcpInternal",
-				)
-				.mockResolvedValueOnce(null);
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(1);
-		});
-
-		test("should handle resource with LCP impact", async () => {
-			const resources: CapturedResource[] = [
-				{
-					url: TEST_RESOURCE_URL,
-					type: "script",
-					status: 200,
-					sizeKB: 10,
-					requestTime: Date.now(),
-					responseTime: Date.now() + 50,
-					durationMs: 50,
-				},
-			];
-			const ctx = createMockContext(resources);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			const spy = jest.spyOn(service as any, "measureLcpInternal");
-			spy.mockResolvedValueOnce(2000);
-			spy.mockResolvedValueOnce(3500);
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(1);
-		});
-
-		test("should handle resource with non-critical LCP impact", async () => {
-			const resources: CapturedResource[] = [
-				{
-					url: TEST_RESOURCE_URL,
-					type: "script",
-					status: 200,
-					sizeKB: 10,
-					requestTime: Date.now(),
-					responseTime: Date.now() + 50,
-					durationMs: 50,
-				},
-			];
-			const ctx = createMockContext(resources);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			const spy = jest.spyOn(service as any, "measureLcpInternal");
-			spy.mockResolvedValueOnce(2000);
-			spy.mockResolvedValueOnce(2500);
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(0);
-		});
-
-		test("should treat resource as critical if measureLcpWithDelay fails", async () => {
-			const resources: CapturedResource[] = [
-				{
-					url: TEST_RESOURCE_URL,
-					type: "script",
-					status: 200,
-					sizeKB: 10,
-					requestTime: Date.now(),
-					responseTime: Date.now() + 50,
-					durationMs: 50,
-				},
-			];
-			const ctx = createMockContext(resources);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			const spy = jest.spyOn(service as any, "measureLcpInternal");
-			spy.mockResolvedValueOnce(2000);
-			spy.mockRejectedValueOnce(new Error("Impact measurement failed"));
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(1);
-		});
-
-		test("should treat resource as critical if impactedLcp is null", async () => {
-			const resources: CapturedResource[] = [
-				{
-					url: TEST_RESOURCE_URL,
-					type: "script",
-					status: 200,
-					sizeKB: 10,
-					requestTime: Date.now(),
-					responseTime: Date.now() + 50,
-					durationMs: 50,
-				},
-			];
-			const ctx = createMockContext(resources);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			const spy = jest.spyOn(service as any, "measureLcpInternal");
-			spy.mockResolvedValueOnce(2000);
-			spy.mockResolvedValueOnce(null);
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(1);
-		});
-
-		test("should log warning and treat resource as critical if measureLcpWithDelay returns null", async () => {
-			const resources: CapturedResource[] = [
-				{
-					url: TEST_RESOURCE_URL,
-					type: "script",
-					status: 200,
-					sizeKB: 10,
-					requestTime: Date.now(),
-					responseTime: Date.now() + 50,
-					durationMs: 50,
-				},
-			];
-			const ctx = createMockContext(resources);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			const spy = jest.spyOn(service as any, "measureLcpInternal");
-			spy.mockResolvedValueOnce(2000);
-			spy.mockResolvedValueOnce(null);
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const result = await (service as any).filter(ctx);
-			expect(result.capturedResources).toHaveLength(1);
-			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				expect.stringContaining("Failed to measure LCP with delayed resource"),
 			);
 		});
 	});
@@ -600,76 +568,74 @@ describe("LcpImpactEvaluationService", () => {
 	describe("measureLcpInternal", () => {
 		test("should return LCP value on successful navigation", async () => {
 			mockPage.evaluate.mockResolvedValueOnce(2500);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			const result = await (service as any).measureLcpInternal(TEST_URL);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL);
 			expect(result).toBe(2500);
 		});
 
 		test("should return null if page.goto fails", async () => {
 			mockPage.goto.mockRejectedValueOnce(new Error("Navigation failed"));
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			const result = await (service as any).measureLcpInternal(TEST_URL);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL);
 			expect(result).toBeNull();
 		});
 
 		test("should setup delay interception if delayResourceUrl is provided", async () => {
 			mockPage.evaluate.mockResolvedValueOnce(2500);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			const setupSpy = jest.spyOn(service as any, "setupDelayInterception");
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			await (service as any).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
+			const setupSpy = jest.spyOn(
+				service as unknown as ServiceWithInternals,
+				"setupDelayInterception",
+			);
+			await (service as unknown as ServiceWithInternals).measureLcpInternal(
+				TEST_URL,
+				TEST_RESOURCE_URL,
+			);
 			expect(setupSpy).toHaveBeenCalledWith(mockPage, TEST_RESOURCE_URL);
 		});
 
 		test("should return null if evaluate returns non-number", async () => {
 			mockPage.evaluate.mockResolvedValueOnce(null);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			const result = await (service as any).measureLcpInternal(TEST_URL);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL);
 			expect(result).toBeNull();
 		});
 	});
 
 	describe("setupLcpObserver", () => {
-		// biome-ignore lint/suspicious/noExplicitAny: complex mock type
-		let observerCallback: (entries: { getEntries: () => any[] }) => void;
-		// biome-ignore lint/suspicious/noExplicitAny: complex mock type
-		let mockObserver: any;
+		let observerCallback: (entries: { getEntries: () => unknown[] }) => void;
+		let mockObserver: { observe: jest.Mock; disconnect: jest.Mock };
 
 		beforeEach(() => {
 			mockObserver = {
 				observe: jest.fn(),
 				disconnect: jest.fn(),
 			};
-			// biome-ignore lint/suspicious/noExplicitAny: browser context global
-			(global as any).PerformanceObserver = jest
-				.fn()
-				.mockImplementation((callback) => {
-					observerCallback = callback;
-					return mockObserver;
-				});
+			(
+				global as unknown as { PerformanceObserver: unknown }
+			).PerformanceObserver = jest.fn().mockImplementation((callback) => {
+				observerCallback = callback;
+				return mockObserver;
+			});
 
-			// biome-ignore lint/suspicious/noExplicitAny: browser context global
-			(global as any).window = {
+			(global as unknown as { window: unknown }).window = {
 				addEventListener: jest.fn(),
 			};
-			// biome-ignore lint/suspicious/noExplicitAny: browser context global
-			(global as any).document = {
+			(global as unknown as { document: unknown }).document = {
 				visibilityState: "visible",
 			};
 		});
 
 		afterEach(() => {
-			// biome-ignore lint/suspicious/noExplicitAny: browser context global
-			delete (global as any).PerformanceObserver;
-			// biome-ignore lint/suspicious/noExplicitAny: browser context global
-			delete (global as any).window;
-			// biome-ignore lint/suspicious/noExplicitAny: browser context global
-			delete (global as any).document;
+			delete (global as unknown as Record<string, unknown>).PerformanceObserver;
+			delete (global as unknown as Record<string, unknown>).window;
+			delete (global as unknown as Record<string, unknown>).document;
 		});
 
 		test("should set __prefetcherLcp when LCP entry is observed", () => {
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			(service as any).setupLcpObserver(mockPage);
+			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
 			// Trigger observer callback
 			mockPage.evaluateOnNewDocument.mock.calls[0][0]();
 
@@ -691,8 +657,9 @@ describe("LcpImpactEvaluationService", () => {
 			mockPage.evaluateOnNewDocument.mockImplementationOnce(() => {
 				throw new Error("Setup error");
 			});
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.any(Error),
 				expect.stringContaining("Failed to setup LCP observer"),
@@ -700,8 +667,7 @@ describe("LcpImpactEvaluationService", () => {
 		});
 
 		test("should not set __prefetcherLcp if no LCP entry", () => {
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			(service as any).setupLcpObserver(mockPage);
+			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
 			mockPage.evaluateOnNewDocument.mock.calls[0][0]();
 
 			const entries = {
@@ -712,15 +678,15 @@ describe("LcpImpactEvaluationService", () => {
 		});
 
 		test("should disconnect observer when visibility changes to hidden", () => {
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			(service as any).setupLcpObserver(mockPage);
+			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
 			const evaluateFn = mockPage.evaluateOnNewDocument.mock.calls[0][0];
 
 			// Mock window.addEventListener to capture the callback
-			// biome-ignore lint/suspicious/noExplicitAny: capture browser event listeners
-			const eventListeners: { [key: string]: (...args: any[]) => any } = {};
-			// biome-ignore lint/suspicious/noExplicitAny: browser context
-			(global as any).window.addEventListener = jest
+			const eventListeners: { [key: string]: (...args: unknown[]) => unknown } =
+				{};
+			(
+				global as unknown as { window: { addEventListener: jest.Mock } }
+			).window.addEventListener = jest
 				.fn()
 				.mockImplementation((event, callback) => {
 					eventListeners[event] = callback;
@@ -731,22 +697,23 @@ describe("LcpImpactEvaluationService", () => {
 			expect(eventListeners.visibilitychange).toBeDefined();
 
 			// Simulate visibility change to hidden
-			// biome-ignore lint/suspicious/noExplicitAny: browser context
-			(global as any).document.visibilityState = "hidden";
+			(
+				global as unknown as { document: { visibilityState: string } }
+			).document.visibilityState = "hidden";
 			eventListeners.visibilitychange();
 
 			expect(mockObserver.disconnect).toHaveBeenCalled();
 		});
 
 		test("should not disconnect observer when visibility changes to visible", () => {
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			(service as any).setupLcpObserver(mockPage);
+			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
 			const evaluateFn = mockPage.evaluateOnNewDocument.mock.calls[0][0];
 
-			// biome-ignore lint/suspicious/noExplicitAny: capture browser event listeners
-			const eventListeners: { [key: string]: (...args: any[]) => any } = {};
-			// biome-ignore lint/suspicious/noExplicitAny: browser context
-			(global as any).window.addEventListener = jest
+			const eventListeners: { [key: string]: (...args: unknown[]) => unknown } =
+				{};
+			(
+				global as unknown as { window: { addEventListener: jest.Mock } }
+			).window.addEventListener = jest
 				.fn()
 				.mockImplementation((event, callback) => {
 					eventListeners[event] = callback;
@@ -755,28 +722,31 @@ describe("LcpImpactEvaluationService", () => {
 			evaluateFn();
 
 			// Simulate visibility change to visible
-			// biome-ignore lint/suspicious/noExplicitAny: browser context
-			(global as any).document.visibilityState = "visible";
+			(
+				global as unknown as { document: { visibilityState: string } }
+			).document.visibilityState = "visible";
 			eventListeners.visibilitychange();
 
 			expect(mockObserver.disconnect).not.toHaveBeenCalled();
 		});
 
 		test("should handle error in browser context", () => {
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
-			(service as any).setupLcpObserver(mockPage);
+			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
 			const evaluateFn = mockPage.evaluateOnNewDocument.mock.calls[0][0];
 
 			// Make PerformanceObserver throw to trigger catch block
-			// biome-ignore lint/suspicious/noExplicitAny: browser context
-			(global as any).PerformanceObserver = jest.fn().mockImplementation(() => {
+			(
+				global as unknown as { PerformanceObserver: jest.Mock }
+			).PerformanceObserver = jest.fn().mockImplementation(() => {
 				throw new Error("Browser error");
 			});
 
 			evaluateFn();
 
-			// biome-ignore lint/suspicious/noExplicitAny: browser context
-			expect((global as any).window.__prefetcherLcpError).toBeDefined();
+			expect(
+				(global as unknown as { window: { __prefetcherLcpError: unknown } })
+					.window.__prefetcherLcpError,
+			).toBeDefined();
 		});
 	});
 });

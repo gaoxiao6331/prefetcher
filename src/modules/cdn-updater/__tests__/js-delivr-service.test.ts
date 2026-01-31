@@ -4,6 +4,16 @@ import axios from "axios";
 import type { FastifyInstance } from "fastify";
 import JsDelivrService from "../js-delivr-service";
 
+type ServiceWithInternals = {
+	configureGit: (repoPath: string) => Promise<void>;
+	purgeJsDelivrCache: (
+		namespace: string,
+		projectName: string,
+		fileName: string,
+		branch: string,
+	) => Promise<void>;
+};
+
 // Mock external dependencies
 jest.mock("fs", () => ({
 	existsSync: jest.fn(),
@@ -73,8 +83,7 @@ describe("JsDelivrService", () => {
 	});
 
 	test("should throw error only if config is missing", async () => {
-		// biome-ignore lint/suspicious/noExplicitAny: mock fastify
-		const badFastify = { config: {} } as any;
+		const badFastify = { config: {} } as unknown as FastifyInstance;
 		await expect(JsDelivrService.create(badFastify)).rejects.toThrow(
 			"Invalid jsDelivr config",
 		);
@@ -91,12 +100,10 @@ describe("JsDelivrService", () => {
 				},
 			},
 			log: { info: jest.fn() },
-			// biome-ignore lint/suspicious/noExplicitAny: mock fastify
-		} as any;
+		} as unknown as FastifyInstance;
 		const service = await JsDelivrService.create(minimalConfig);
 		// Access private for coverage
-		// biome-ignore lint/suspicious/noExplicitAny: access private
-		await (service as any).configureGit("/tmp");
+		await (service as unknown as ServiceWithInternals).configureGit("/tmp");
 		expect(service).toBeDefined();
 	});
 
@@ -233,8 +240,11 @@ describe("JsDelivrService", () => {
 		});
 
 		test("should throw error if remote address is invalid", async () => {
-			// biome-ignore lint/suspicious/noExplicitAny: access config
-			(fastifyMock.config as any).cdn.jsDelivr.remoteAddr = "invalid-url";
+			const config = fastifyMock.config as unknown as Record<
+				string,
+				Record<string, Record<string, string>>
+			>;
+			config.cdn.jsDelivr.remoteAddr = "invalid-url";
 			const service = await JsDelivrService.create(fastifyMock);
 			await expect(service.update("main", "f", "c")).rejects.toThrow(
 				"Invalid github remote address",
@@ -247,8 +257,9 @@ describe("JsDelivrService", () => {
 			(axios.get as jest.Mock).mockResolvedValue({
 				data: "finished in string",
 			});
-			// biome-ignore lint/suspicious/noExplicitAny: access private
-			await (jsDelivrService as any).purgeJsDelivrCache("ns", "pj", "f", "b");
+			await (
+				jsDelivrService as unknown as ServiceWithInternals
+			).purgeJsDelivrCache("ns", "pj", "f", "b");
 			expect(fastifyMock.log.info).toHaveBeenCalledWith(
 				expect.stringContaining("completed"),
 			);
@@ -260,8 +271,7 @@ describe("JsDelivrService", () => {
 			});
 
 			await expect(
-				// biome-ignore lint/suspicious/noExplicitAny: access private
-				(jsDelivrService as any).purgeJsDelivrCache(
+				(jsDelivrService as unknown as ServiceWithInternals).purgeJsDelivrCache(
 					"ns",
 					"proj",
 					"file.js",
@@ -274,8 +284,7 @@ describe("JsDelivrService", () => {
 			(axios.get as jest.Mock).mockRejectedValue(new Error("Network Error"));
 
 			await expect(
-				// biome-ignore lint/suspicious/noExplicitAny: access private
-				(jsDelivrService as any).purgeJsDelivrCache(
+				(jsDelivrService as unknown as ServiceWithInternals).purgeJsDelivrCache(
 					"ns",
 					"proj",
 					"file.js",
@@ -288,8 +297,7 @@ describe("JsDelivrService", () => {
 			(axios.get as jest.Mock).mockRejectedValue("String Error");
 
 			await expect(
-				// biome-ignore lint/suspicious/noExplicitAny: access private
-				(jsDelivrService as any).purgeJsDelivrCache(
+				(jsDelivrService as unknown as ServiceWithInternals).purgeJsDelivrCache(
 					"ns",
 					"proj",
 					"file.js",

@@ -3,27 +3,35 @@
  * Commonly used to limit access to scarce resources (e.g., database connections, headless browser instances) and prevent service overload.
  */
 export class Semaphore {
-	private tasks: (() => void)[] = [];
-	private count: number;
+	private _tasks: (() => void)[] = [];
+	private _count: number;
 
 	/**
 	 * @param max Maximum number of concurrent permits
 	 */
 	constructor(readonly max: number) {
-		this.count = max;
+		this._count = max;
+	}
+
+	get tasks(): (() => void)[] {
+		return this._tasks;
+	}
+
+	get count(): number {
+		return this._count;
 	}
 
 	/**
 	 * Acquires a permit. If no permit is available, it enters the waiting queue.
 	 */
 	async acquire(): Promise<void> {
-		if (this.count > 0) {
-			this.count--;
+		if (this._count > 0) {
+			this._count--;
 			return;
 		}
 
 		return new Promise<void>((resolve) => {
-			this.tasks.push(resolve);
+			this._tasks.push(resolve);
 		});
 	}
 
@@ -31,11 +39,11 @@ export class Semaphore {
 	 * Releases a permit, waking up the next task in the waiting queue (if any).
 	 */
 	release(): void {
-		if (this.tasks.length > 0) {
-			const next = this.tasks.shift();
+		if (this._tasks.length > 0) {
+			const next = this._tasks.shift();
 			if (next) next();
 		} else {
-			this.count++;
+			this._count++;
 		}
 	}
 

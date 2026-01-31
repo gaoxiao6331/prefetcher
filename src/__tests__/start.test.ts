@@ -1,4 +1,5 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
+import type { Config } from "@/config/type";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 import { start } from "../start";
 
@@ -10,8 +11,10 @@ jest.mock("@/utils/create-fastify-instance", () => ({
 describe("Start Function", () => {
 	let originalExit: (code?: number) => never;
 	let originalProcessOn: NodeJS.Process["on"];
-	// biome-ignore lint/suspicious/noExplicitAny: mock config
-	let mockFastify: Partial<FastifyInstance> & { alert: jest.Mock; config: any };
+	let mockFastify: Omit<Partial<FastifyInstance>, "config"> & {
+		alert: jest.Mock;
+		config: Partial<Config>;
+	};
 
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -21,27 +24,35 @@ describe("Start Function", () => {
 			register: jest.fn().mockReturnThis(),
 			ready: jest.fn().mockResolvedValue(undefined),
 			close: jest.fn().mockResolvedValue(undefined),
-			// biome-ignore lint/suspicious/noExplicitAny: mock log
-			log: { info: jest.fn(), error: jest.fn() } as any,
+			log: {
+				info: jest.fn(),
+				error: jest.fn(),
+				debug: jest.fn(),
+				warn: jest.fn(),
+				fatal: jest.fn(),
+				trace: jest.fn(),
+				silent: jest.fn(),
+				child: jest.fn(),
+			} as unknown as FastifyBaseLogger,
 			alert: jest.fn(),
 			config: { port: 3000 },
+		} as unknown as Omit<Partial<FastifyInstance>, "config"> & {
+			alert: jest.Mock;
+			config: Partial<Config>;
 		};
 
 		(createFastifyInstance as jest.Mock).mockResolvedValue(mockFastify);
 
 		originalExit = process.exit;
-		// biome-ignore lint/suspicious/noExplicitAny: mock exit
-		process.exit = jest.fn() as any;
+		process.exit = jest.fn() as unknown as (code?: number) => never;
 		originalProcessOn = process.on;
-		// biome-ignore lint/suspicious/noExplicitAny: mock process.on
-		process.on = jest.fn() as any;
+		process.on = jest.fn() as unknown as NodeJS.Process["on"];
 	});
 
 	afterEach(() => {
 		process.exit = originalExit;
 		process.on = originalProcessOn;
-		// biome-ignore lint/suspicious/noExplicitAny: cleanup globalThis
-		delete (globalThis as any).startParams;
+		delete (globalThis as unknown as { startParams?: unknown }).startParams;
 	});
 
 	test("should start server successfully", async () => {
@@ -101,8 +112,9 @@ describe("Start Function", () => {
 	});
 
 	test("should handle unhandledRejection (non-debug)", async () => {
-		let rejectionHandler: // biome-ignore lint/suspicious/noExplicitAny: Node.js callback signature
-		((reason: any, promise: Promise<any>) => void) | undefined;
+		let rejectionHandler:
+			| ((reason: unknown, promise: Promise<unknown>) => void)
+			| undefined;
 		(process.on as jest.Mock).mockImplementation((event, handler) => {
 			if (event === "unhandledRejection") rejectionHandler = handler;
 		});
@@ -118,8 +130,9 @@ describe("Start Function", () => {
 	});
 
 	test("should handle unhandledRejection (debug)", async () => {
-		let rejectionHandler: // biome-ignore lint/suspicious/noExplicitAny: Node.js callback signature
-		((reason: any, promise: Promise<any>) => void) | undefined;
+		let rejectionHandler:
+			| ((reason: unknown, promise: Promise<unknown>) => void)
+			| undefined;
 		(process.on as jest.Mock).mockImplementation((event, handler) => {
 			if (event === "unhandledRejection") rejectionHandler = handler;
 		});

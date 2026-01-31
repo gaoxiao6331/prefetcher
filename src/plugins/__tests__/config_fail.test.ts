@@ -2,8 +2,7 @@ import * as path from "node:path";
 import Fastify from "fastify";
 
 describe("Config Plugin Error Path", () => {
-	// biome-ignore lint/suspicious/noExplicitAny: mock console.log
-	let originalLog: any;
+	let originalLog: typeof console.log;
 	let exitSpy: jest.SpyInstance;
 	let originalArgv: string[];
 

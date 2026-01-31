@@ -10,8 +10,7 @@ type ServiceWithInternals = AllJsAndCssService & {
 
 jest.mock("puppeteer");
 jest.mock("@/utils/trace-context", () => ({
-	// biome-ignore lint/suspicious/noExplicitAny: mock bind
-	bindAsyncContext: (fn: any) => fn,
+	bindAsyncContext: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
 	getLogger: jest.fn().mockReturnValue(null),
 }));
 

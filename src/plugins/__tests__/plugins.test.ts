@@ -1,5 +1,6 @@
 import path from "node:path";
 import Fastify from "fastify";
+import type { NotifierService } from "../../modules/notifier/type";
 import alertPlugin from "../alert";
 import configPlugin from "../config";
 import monitorPlugin from "../monitor";
@@ -38,8 +39,7 @@ describe("Plugins", () => {
 		await app.ready();
 
 		expect(app.hasDecorator("config")).toBe(true);
-		// biome-ignore lint/suspicious/noExplicitAny: access decorated config
-		expect((app as any).config.port).toBeDefined();
+		expect(app.config.port).toBeDefined();
 	});
 
 	test("monitor plugin should register", async () => {
@@ -52,9 +52,10 @@ describe("Plugins", () => {
 		const app = Fastify();
 		const mockNotifier = {
 			error: jest.fn(),
-		};
-		// biome-ignore lint/suspicious/noExplicitAny: mock service
-		app.decorate("notifierService", mockNotifier as any);
+			info: jest.fn(),
+			warn: jest.fn(),
+		} as unknown as NotifierService;
+		app.decorate("notifierService", mockNotifier);
 
 		await app.register(alertPlugin);
 		await app.ready();
@@ -74,8 +75,11 @@ describe("Plugins", () => {
 		const alertPlg = require("../alert").default;
 
 		const app = Fastify();
-		// biome-ignore lint/suspicious/noExplicitAny: mock service
-		app.decorate("notifierService", { error: jest.fn() } as any);
+		app.decorate("notifierService", {
+			error: jest.fn(),
+			info: jest.fn(),
+			warn: jest.fn(),
+		} as unknown as NotifierService);
 		await app.register(alertPlg);
 		await app.ready();
 

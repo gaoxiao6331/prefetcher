@@ -1,4 +1,6 @@
+import type { FastifyInstance } from "fastify";
 import Fastify from "fastify";
+import type { Config } from "@/config/type";
 import cdnUpdaterModule from "../modules/cdn-updater";
 import notifierModule from "../modules/notifier";
 import resourceGeneratorModule from "../modules/resource-generator";
@@ -20,10 +22,8 @@ jest.mock("child_process");
 // Mock config plugin to avoid dynamic import issues in tests
 jest.mock("../plugins/config", () => {
 	const fp = require("fastify-plugin");
-	// biome-ignore lint/suspicious/noExplicitAny: mock fastify
-	return fp(async (fastify: any) => {
+	return fp(async (fastify: FastifyInstance) => {
 		fastify.decorate("config", {
-			app: { port: 3000 },
 			port: 3000,
 			cdn: {
 				jsDelivr: {
@@ -32,15 +32,13 @@ jest.mock("../plugins/config", () => {
 					git: { name: "n", email: "e" },
 				},
 			},
-			alert: { lark: { tokens: ["t"] } },
-		});
+		} as Config);
 	});
 });
 
 import configPlugin from "../plugins/config";
 
 const mockConfig = {
-	app: { port: 3000 },
 	port: 3000,
 	cdn: {
 		jsDelivr: {
@@ -49,8 +47,7 @@ const mockConfig = {
 			git: { name: "n", email: "e" },
 		},
 	},
-	alert: { lark: { tokens: ["t"] } },
-};
+} as Config;
 
 describe("Entrypoints and Plugins", () => {
 	test("Resource Generator Module should register", async () => {

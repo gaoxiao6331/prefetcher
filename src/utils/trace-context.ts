@@ -52,7 +52,8 @@ export const getLogger = (): FastifyBaseLogger | undefined => {
  * @param fn The callback function that needs to bind the context
  * @returns A new function bound with the current AsyncLocalStorage context
  */
-// biome-ignore lint/suspicious/noExplicitAny: Generic function wrapper needs any for flexibility
-export function bindAsyncContext<T extends (...args: any[]) => any>(fn: T): T {
+export function bindAsyncContext<Args extends unknown[], R>(
+	fn: (...args: Args) => R,
+): (...args: Args) => R {
 	return AsyncResource.bind(fn);
 }

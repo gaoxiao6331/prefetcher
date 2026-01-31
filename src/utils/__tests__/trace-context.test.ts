@@ -1,3 +1,4 @@
+import type { FastifyBaseLogger } from "fastify";
 import {
 	bindAsyncContext,
 	getLogger,
@@ -14,8 +15,7 @@ describe("trace-context", () => {
 	test("should retrieve context within run", () => {
 		const mockContext = {
 			traceId: "123",
-			// biome-ignore lint/suspicious/noExplicitAny: mock logger
-			logger: { info: jest.fn() } as any,
+			logger: { info: jest.fn() } as unknown as FastifyBaseLogger,
 		};
 
 		traceStorage.run(mockContext, () => {
@@ -27,8 +27,7 @@ describe("trace-context", () => {
 	test("bindAsyncContext should preserve context", async () => {
 		const mockContext = {
 			traceId: "abc",
-			// biome-ignore lint/suspicious/noExplicitAny: mock logger
-			logger: {} as any,
+			logger: {} as FastifyBaseLogger,
 		};
 
 		await traceStorage.run(mockContext, async () => {

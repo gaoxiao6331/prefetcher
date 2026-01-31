@@ -7,8 +7,7 @@ import type { NotifierService } from "./type";
 interface MessageConfig {
 	color: string;
 	content: string;
-	// biome-ignore lint/suspicious/noExplicitAny: cannot find type definition
-	extraElements: any[];
+	extraElements: Record<string, unknown>[];
 }
 
 type MessageType = "info" | "warn" | "error";
