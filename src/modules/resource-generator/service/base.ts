@@ -54,6 +54,7 @@ abstract class BaseService implements ResourceGeneratorService {
 			const headless = !isDebugMode();
 			this.browser = await puppeteer.launch({
 				headless,
+				devtools: !headless, // Automatically open DevTools in non-headless mode
 				args: [
 					"--no-sandbox",
 					"--disable-setuid-sandbox",
