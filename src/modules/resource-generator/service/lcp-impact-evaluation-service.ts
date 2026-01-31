@@ -11,38 +11,12 @@ declare global {
 }
 
 /**
- * Function executed in browser context to get the current LCP (Largest Contentful Paint) value
- * @returns {number | null} LCP time in milliseconds, or null if failed to retrieve
- */
-export function _evaluateLcpInBrowserContext(): number | null {
-	// Prioritize __prefetcherLcp captured by PerformanceObserver
-	if (typeof window.__prefetcherLcp === "number") {
-		return window.__prefetcherLcp;
-	}
-
-	// Fallback: Get existing LCP entries from Performance API
-	try {
-		const entries = window.performance.getEntriesByType(
-			"largest-contentful-paint",
-		);
-		const lastEntry = entries[entries.length - 1] as
-			| (PerformanceEntry & { startTime: number })
-			| undefined;
-		return lastEntry && typeof lastEntry.startTime === "number"
-			? lastEntry.startTime
-			: null;
-	} catch (_e) {
-		return null;
-	}
-}
-
-/**
  * LCP Impact Evaluation Service
  * Simulates page loading via Puppeteer to measure the impact of specific resource delay on LCP
  */
 export class LcpImpactEvaluationService extends AllJsService {
 	/** LCP impact threshold: if delayed resource causes LCP to increase significantly */
-	private static readonly LCP_IMPACT_THRESHOLD_MS = 20_000;
+	private static readonly LCP_IMPACT_THRESHOLD_MS = 10_000;
 
 	/** Proximity ratio to consider a resource critical (90% of threshold) */
 	private static readonly CRITICAL_PROXIMITY_RATIO = 0.9;
@@ -59,7 +33,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 		LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS * 3;
 
 	/** Wait time for browser to process rendering after resource load */
-	private static readonly POST_LOAD_RENDER_WAIT_MS = 500;
+	private static readonly POST_LOAD_RENDER_WAIT_MS = 2_000;
 
 	/**
 	 * Filter resources: only keep critical resources that have a significant impact on LCP
@@ -85,8 +59,16 @@ export class LcpImpactEvaluationService extends AllJsService {
 		const tasks = resources.map((resource: CapturedResource) =>
 			validationSemaphore.run(async () => {
 				try {
+					// Skip impact evaluation for the main document itself
+					if (resource.url === ctx.url) {
+						this.log.debug(
+							`[LCP] Skipping impact evaluation for main document: ${resource.url}`,
+						);
+						return false;
+					}
+
 					// Simulate delayed loading of the current resource and measure new LCP
-					const impactedLcp = await this.measureLcpWithDelay(
+					const impactedLcp = await this.measureLcpInternal(
 						ctx.url,
 						resource.url,
 					);
@@ -130,18 +112,6 @@ export class LcpImpactEvaluationService extends AllJsService {
 			...baseCtx,
 			capturedResources: criticalResources,
 		};
-	}
-
-	/**
-	 * Measure page LCP after delaying a specific resource
-	 * @param url Page URL
-	 * @param delayResourceUrl URL of the resource to delay
-	 */
-	private async measureLcpWithDelay(
-		url: string,
-		delayResourceUrl: string,
-	): Promise<number | null> {
-		return this.measureLcpInternal(url, delayResourceUrl);
 	}
 
 	/**
@@ -207,12 +177,14 @@ export class LcpImpactEvaluationService extends AllJsService {
 
 		try {
 			// Navigate to the target page and wait for network idle
-			// Note: networkidle2 allows up to 2 active connections. If we only delay 1 resource,
+			// Note: networkidle2 allows up to 0 active connections. If we only delay 1 resource,
 			// networkidle2 might trigger in 0.5s before our 10s delay finishes.
 			await page.goto(url, {
-				waitUntil: "networkidle2",
+				waitUntil: "networkidle0",
 				timeout: LcpImpactEvaluationService.PAGE_GOTO_TIMEOUT_MS,
 			});
+
+			this.log.debug(`page goto ready time: ${Date()}`);
 
 			if (delayResourceUrl) {
 				// Core fix: explicitly wait for the resource to finish loading if it's being delayed
@@ -223,7 +195,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 				await new Promise((resolve) =>
 					setTimeout(
 						resolve,
-						LcpImpactEvaluationService.POST_LOAD_RENDER_WAIT_MS,
+						LcpImpactEvaluationService.POST_LOAD_RENDER_WAIT_MS
 					),
 				);
 			}
@@ -233,7 +205,9 @@ export class LcpImpactEvaluationService extends AllJsService {
 		}
 
 		// Execute script in browser context to retrieve LCP value
-		const lcp = await page.evaluate(_evaluateLcpInBrowserContext);
+		const lcp = await page.evaluate(function () {
+			return window.__prefetcherLcp;
+		});
 
 		return typeof lcp === "number" ? lcp : null;
 	}
@@ -287,6 +261,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 					// Create PerformanceObserver to listen for largest-contentful-paint events
 					const observer = new PerformanceObserver((entryList) => {
 						const entries = entryList.getEntries();
+						console.log('LCP time', Date(), entries);
 						const last = entries[entries.length - 1] as
 							| (PerformanceEntry & { startTime: number })
 							| undefined;
@@ -300,17 +275,6 @@ export class LcpImpactEvaluationService extends AllJsService {
 						type: "largest-contentful-paint",
 						buffered: true,
 					});
-
-					// Stop observing when page becomes hidden (LCP definition excludes paints after hidden)
-					window.addEventListener(
-						"visibilitychange",
-						() => {
-							if (document.visibilityState === "hidden") {
-								observer.disconnect();
-							}
-						},
-						{ once: true },
-					);
 				} catch (error) {
 					// Record script execution error
 					window.__prefetcherLcpError = error;
