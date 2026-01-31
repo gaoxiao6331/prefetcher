@@ -116,7 +116,7 @@ class InterceptionBlankScreenService extends AllJsService {
 		};
 	}
 
-	private static _evaluateDomBlankScreen() {
+	protected static _evaluateDomBlankScreen() {
 		try {
 			// 1. Define sampling points (10x10 grid across viewport, avoiding extreme edges)
 			const samplingPoints = 10;
@@ -171,7 +171,7 @@ class InterceptionBlankScreenService extends AllJsService {
 		}
 	}
 
-	private async isBlankScreen(
+	protected async isBlankScreen(
 		page: Page,
 	): Promise<{ decided: boolean; blank: boolean }> {
 		const domAnalysisResult = await page.evaluate(
@@ -209,7 +209,7 @@ class InterceptionBlankScreenService extends AllJsService {
 		return { decided: true, blank: blankRateFromScreenshot >= 90 };
 	}
 
-	private static _evaluateScreenshotBlankScreen(
+	protected static _evaluateScreenshotBlankScreen(
 		screenshot: string,
 	): Promise<number> {
 		return new Promise((resolve) => {

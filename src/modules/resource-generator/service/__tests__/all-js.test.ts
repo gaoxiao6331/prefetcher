@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer from "puppeteer";
+import type { CapturedResource, GenerateContext } from "../../type";
 import JsOnlyService from "../all-js-service";
 
 jest.mock("puppeteer");
@@ -409,7 +410,10 @@ describe("AllJsService", () => {
 				{ url: "large.js", type: "script", sizeKB: 50, durationMs: 100 },
 				{ url: "image.png", type: "image", sizeKB: 5, durationMs: 50 },
 			];
-			const ctx = { url: TEST_URL, capturedResources: resources } as any;
+			const ctx: GenerateContext = {
+				url: TEST_URL,
+				capturedResources: resources as CapturedResource[],
+			};
 
 			const filteredCtx = await service.filter(ctx);
 			expect(filteredCtx.capturedResources.length).toBe(2);

@@ -375,9 +375,13 @@ describe("LcpImpactEvaluationService", () => {
 			const ctx = createMockContext(resources);
 
 			// Mock measureLcpInternal instead of measureLcp to cover wrappers
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
 			const measureLcpInternalSpy = jest.spyOn(
-				service as any,
+				service as unknown as {
+					measureLcpInternal: (
+						url: string,
+						delayResourceUrl?: string,
+					) => Promise<number | null>;
+				},
 				"measureLcpInternal",
 			);
 			measureLcpInternalSpy.mockResolvedValueOnce(2000); // Baseline
@@ -431,9 +435,16 @@ describe("LcpImpactEvaluationService", () => {
 				},
 			];
 			const ctx = createMockContext(resources);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
 			jest
-				.spyOn(service as any, "measureLcpInternal")
+				.spyOn(
+					service as unknown as {
+						measureLcpInternal: (
+							url: string,
+							delayResourceUrl?: string,
+						) => Promise<number | null>;
+					},
+					"measureLcpInternal",
+				)
 				.mockRejectedValueOnce(new Error("Measure failed"));
 			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
 			await (service as any).filter(ctx);
@@ -456,9 +467,16 @@ describe("LcpImpactEvaluationService", () => {
 				},
 			];
 			const ctx = createMockContext(resources);
-			// biome-ignore lint/suspicious/noExplicitAny: access private method for test
 			jest
-				.spyOn(service as any, "measureLcpInternal")
+				.spyOn(
+					service as unknown as {
+						measureLcpInternal: (
+							url: string,
+							delayResourceUrl?: string,
+						) => Promise<number | null>;
+					},
+					"measureLcpInternal",
+				)
 				.mockResolvedValueOnce(null);
 			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
 			const result = await (service as any).filter(ctx);
@@ -699,7 +717,8 @@ describe("LcpImpactEvaluationService", () => {
 			const evaluateFn = mockPage.evaluateOnNewDocument.mock.calls[0][0];
 
 			// Mock window.addEventListener to capture the callback
-			const eventListeners: { [key: string]: Function } = {};
+			// biome-ignore lint/suspicious/noExplicitAny: capture browser event listeners
+			const eventListeners: { [key: string]: (...args: any[]) => any } = {};
 			// biome-ignore lint/suspicious/noExplicitAny: browser context
 			(global as any).window.addEventListener = jest
 				.fn()
@@ -724,7 +743,8 @@ describe("LcpImpactEvaluationService", () => {
 			(service as any).setupLcpObserver(mockPage);
 			const evaluateFn = mockPage.evaluateOnNewDocument.mock.calls[0][0];
 
-			const eventListeners: { [key: string]: Function } = {};
+			// biome-ignore lint/suspicious/noExplicitAny: capture browser event listeners
+			const eventListeners: { [key: string]: (...args: any[]) => any } = {};
 			// biome-ignore lint/suspicious/noExplicitAny: browser context
 			(global as any).window.addEventListener = jest
 				.fn()

@@ -57,6 +57,20 @@ interface MockBrowser {
 	on: jest.Mock;
 }
 
+type ServiceWithInternals = InterceptionBlankScreenService & {
+	getPage: () => Promise<{
+		page: MockPage;
+		[Symbol.asyncDispose]: () => Promise<void>;
+	}>;
+	filter: (
+		ctx: GenerateContext,
+	) => Promise<GenerateContext & { validationResults: boolean[] }>;
+	// biome-ignore lint/suspicious/noExplicitAny: test mock
+	isBlankScreen: (page: any) => Promise<{ decided: boolean; blank: boolean }>;
+	_evaluateDomBlankScreen: () => { decided: boolean; blankRate: number };
+	_evaluateScreenshotBlankScreen: (screenshot: string) => Promise<number>;
+};
+
 function createMockPageInstance(
 	blankScreenResult: boolean = true,
 	evaluateMock?: jest.Mock,
@@ -71,8 +85,8 @@ function createMockPageInstance(
 				async (fn: (...args: any[]) => any, ..._args: any[]) => {
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+							._evaluateDomBlankScreen
 					) {
 						return {
 							decided: true,
@@ -81,8 +95,7 @@ function createMockPageInstance(
 					}
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
 							._evaluateScreenshotBlankScreen
 					) {
 						return blankScreenResult ? 100 : 0;
@@ -158,8 +171,7 @@ describe("InterceptionBlankScreenService", () => {
 
 		beforeEach(() => {
 			getPageSpy = jest
-				// biome-ignore lint/suspicious/noExplicitAny: access private
-				.spyOn(service as any, "getPage")
+				.spyOn(service as unknown as ServiceWithInternals, "getPage")
 				.mockImplementation(async () => {
 					const mockPageInstance = createMockPageInstance(
 						true,
@@ -201,8 +213,9 @@ describe("InterceptionBlankScreenService", () => {
 
 			const evaluateMock = jest.fn().mockImplementation((fn) => {
 				if (
-					// biome-ignore lint/suspicious/noExplicitAny: access private static
-					fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					fn ===
+					(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+						._evaluateDomBlankScreen
 				) {
 					return { decided: true, blankRate: 100 };
 				}
@@ -218,8 +231,9 @@ describe("InterceptionBlankScreenService", () => {
 				};
 			});
 
-			// biome-ignore lint/suspicious/noExplicitAny: access protected
-			const result = await (service as any).filter(ctx);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
 
 			expect(getPageSpy).toHaveBeenCalledTimes(1);
 			expect(evaluateMock).toHaveBeenCalledTimes(1);
@@ -249,8 +263,9 @@ describe("InterceptionBlankScreenService", () => {
 
 			const evaluateMock = jest.fn().mockImplementation((fn) => {
 				if (
-					// biome-ignore lint/suspicious/noExplicitAny: access private static
-					fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					fn ===
+					(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+						._evaluateDomBlankScreen
 				) {
 					return { decided: true, blankRate: 0 };
 				}
@@ -266,8 +281,9 @@ describe("InterceptionBlankScreenService", () => {
 				};
 			});
 
-			// biome-ignore lint/suspicious/noExplicitAny: access protected
-			const result = await (service as any).filter(ctx);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
 
 			expect(getPageSpy).toHaveBeenCalledTimes(1);
 			expect(evaluateMock).toHaveBeenCalledTimes(1);
@@ -298,8 +314,9 @@ describe("InterceptionBlankScreenService", () => {
 			let filterRequestHandler: any;
 			const evaluateMock = jest.fn().mockImplementation((fn) => {
 				if (
-					// biome-ignore lint/suspicious/noExplicitAny: access private static
-					fn === (InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+					fn ===
+					(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+						._evaluateDomBlankScreen
 				) {
 					return { decided: true, blankRate: 0 }; // Non-blank screen
 				}
@@ -331,8 +348,7 @@ describe("InterceptionBlankScreenService", () => {
 				};
 			});
 
-			// biome-ignore lint/suspicious/noExplicitAny: access protected
-			await (service as any).filter(ctx);
+			await (service as unknown as ServiceWithInternals).filter(ctx);
 
 			expect(getPageSpy).toHaveBeenCalledTimes(1);
 			expect(customGotoMock).toHaveBeenCalledTimes(1);
@@ -452,8 +468,9 @@ describe("InterceptionBlankScreenService", () => {
 				};
 			});
 
-			// biome-ignore lint/suspicious/noExplicitAny: access protected
-			const result = await (service as any).filter(ctx);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
 			expect(getPageSpy).toHaveBeenCalledTimes(1);
 			expect(customGotoMock).toHaveBeenCalledTimes(1);
 			expect(result.capturedResources).toHaveLength(1);
@@ -471,8 +488,8 @@ describe("InterceptionBlankScreenService", () => {
 				evaluate: jest.fn().mockImplementation((fn) => {
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+							._evaluateDomBlankScreen
 					) {
 						return { decided: true, blankRate: 100 };
 					}
@@ -481,8 +498,9 @@ describe("InterceptionBlankScreenService", () => {
 				screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			};
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private
-			const result = await (service as any).isBlankScreen(page);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).isBlankScreen(page);
 			expect(result.blank).toBe(true);
 		});
 
@@ -491,8 +509,8 @@ describe("InterceptionBlankScreenService", () => {
 				evaluate: jest.fn().mockImplementation((fn) => {
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+							._evaluateDomBlankScreen
 					) {
 						return { decided: true, blankRate: 0 };
 					}
@@ -501,8 +519,9 @@ describe("InterceptionBlankScreenService", () => {
 				screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			};
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private
-			const result = await (service as any).isBlankScreen(page);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).isBlankScreen(page);
 			expect(result.blank).toBe(false);
 		});
 
@@ -511,8 +530,8 @@ describe("InterceptionBlankScreenService", () => {
 				evaluate: jest.fn().mockImplementation((fn) => {
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+							._evaluateDomBlankScreen
 					) {
 						return { decided: true, blankRate: 100 };
 					}
@@ -521,8 +540,9 @@ describe("InterceptionBlankScreenService", () => {
 				screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			};
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private
-			const result = await (service as any).isBlankScreen(page);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).isBlankScreen(page);
 			expect(result.blank).toBe(true);
 		});
 
@@ -531,8 +551,8 @@ describe("InterceptionBlankScreenService", () => {
 				evaluate: jest.fn().mockImplementation((fn) => {
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+							._evaluateDomBlankScreen
 					) {
 						return { decided: true, blankRate: 100 };
 					}
@@ -541,8 +561,9 @@ describe("InterceptionBlankScreenService", () => {
 				screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			};
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private
-			const result = await (service as any).isBlankScreen(page);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).isBlankScreen(page);
 			expect(result.blank).toBe(true);
 		});
 
@@ -551,15 +572,14 @@ describe("InterceptionBlankScreenService", () => {
 				evaluate: jest.fn().mockImplementation((fn) => {
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+							._evaluateDomBlankScreen
 					) {
 						return { decided: false, blankRate: 50 };
 					}
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
 							._evaluateScreenshotBlankScreen
 					) {
 						return 100;
@@ -569,8 +589,9 @@ describe("InterceptionBlankScreenService", () => {
 				screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			};
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private
-			const result = await (service as any).isBlankScreen(page);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).isBlankScreen(page);
 			expect(result.blank).toBe(true);
 			expect(page.screenshot).toHaveBeenCalledTimes(1);
 		});
@@ -580,15 +601,14 @@ describe("InterceptionBlankScreenService", () => {
 				evaluate: jest.fn().mockImplementation((fn) => {
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+							._evaluateDomBlankScreen
 					) {
 						return { decided: false, blankRate: 50 };
 					}
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
 							._evaluateScreenshotBlankScreen
 					) {
 						return 100;
@@ -598,8 +618,9 @@ describe("InterceptionBlankScreenService", () => {
 				screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			};
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private
-			const result = await (service as any).isBlankScreen(page);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).isBlankScreen(page);
 			expect(result.blank).toBe(true);
 		});
 
@@ -608,15 +629,14 @@ describe("InterceptionBlankScreenService", () => {
 				evaluate: jest.fn().mockImplementation((fn) => {
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+							._evaluateDomBlankScreen
 					) {
 						return { decided: false, blankRate: 50 }; // DOM analysis undecided
 					}
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
 							._evaluateScreenshotBlankScreen
 					) {
 						return 95; // Screenshot analysis result (95% blank)
@@ -626,8 +646,9 @@ describe("InterceptionBlankScreenService", () => {
 				screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			};
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private
-			const result = await (service as any).isBlankScreen(page);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).isBlankScreen(page);
 			expect(result.blank).toBe(true);
 			expect(page.screenshot).toHaveBeenCalledTimes(1);
 		});
@@ -637,8 +658,8 @@ describe("InterceptionBlankScreenService", () => {
 				evaluate: jest.fn().mockImplementation((fn) => {
 					if (
 						fn ===
-						// biome-ignore lint/suspicious/noExplicitAny: access private static
-						(InterceptionBlankScreenService as any)._evaluateDomBlankScreen
+						(InterceptionBlankScreenService as unknown as ServiceWithInternals)
+							._evaluateDomBlankScreen
 					) {
 						return { decided: false, blankRate: 50 }; // DOM analysis undecided
 					}
@@ -647,8 +668,9 @@ describe("InterceptionBlankScreenService", () => {
 				screenshot: jest.fn().mockRejectedValue(new Error("Screenshot failed")),
 			};
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private
-			const result = await (service as any).isBlankScreen(page);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).isBlankScreen(page);
 			expect(result.blank).toBe(true);
 			expect(fastifyMock.log.error).toHaveBeenCalledWith(
 				expect.any(Error),
@@ -694,11 +716,11 @@ describe("InterceptionBlankScreenService static methods", () => {
 
 		test("should return decided: true and blankRate: 100 if no nodes are found", () => {
 			(document.elementsFromPoint as jest.Mock).mockReturnValue([]);
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const result = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateDomBlankScreen();
-			expect(result).toEqual({ decided: true, blankRate: 100 });
+			expect(result.decided).toBe(true);
+			expect(result.blankRate).toBe(100);
 		});
 
 		test("should return decided: true and blankRate: 100 if all nodes are blank selectors", () => {
@@ -710,9 +732,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 				mockElement("body"),
 				mockElement("#app"),
 			]);
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const result = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(true);
 			expect(result.blankRate).toBe(100);
@@ -726,9 +747,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 				mockElement("div"),
 				mockElement("span"),
 			]);
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const result = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(true);
 			expect(result.blankRate).toBe(0);
@@ -739,9 +759,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 				null,
 				undefined,
 			]);
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const result = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(true);
 			expect(result.blankRate).toBe(100);
@@ -756,9 +775,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 				mockElement("div"),
 			]);
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const result = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateDomBlankScreen();
 			expect(result.blankRate).toBeGreaterThanOrEqual(0);
 		});
@@ -767,9 +785,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 			const original = document.elementsFromPoint;
 			// biome-ignore lint/suspicious/noExplicitAny: test environment setup
 			(document as any).elementsFromPoint = undefined;
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const result = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(false);
 			// biome-ignore lint/suspicious/noExplicitAny: test environment cleanup
@@ -789,9 +806,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 				}
 				return [mockElement(false)];
 			});
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const result = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(false);
 			expect(result.blankRate).toBe(50);
@@ -799,12 +815,16 @@ describe("InterceptionBlankScreenService static methods", () => {
 	});
 
 	describe("_evaluateScreenshotBlankScreen", () => {
-		// biome-ignore lint/suspicious/noExplicitAny: test mock
-		let mockImage: any;
-		// biome-ignore lint/suspicious/noExplicitAny: test mock
-		let mockCanvas: any;
-		// biome-ignore lint/suspicious/noExplicitAny: test mock
-		let mockContext: any;
+		let mockImage: { onload: () => void; onerror: () => void; src: string };
+		let mockCanvas: {
+			getContext: jest.Mock;
+			width: number;
+			height: number;
+		};
+		let mockContext: {
+			drawImage: jest.Mock;
+			getImageData: jest.Mock;
+		};
 
 		beforeEach(() => {
 			mockContext = {
@@ -838,9 +858,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 
 		test("should return 100 if canvas context is not available", async () => {
 			mockCanvas.getContext.mockReturnValue(null);
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const resultPromise = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onload(); // Trigger onload to reach the context check
 			const result = await resultPromise;
@@ -848,9 +867,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 		});
 
 		test("should return 100 if image fails to load", async () => {
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const resultPromise = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onerror();
 			const result = await resultPromise;
@@ -862,9 +880,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 			const data = new Uint8ClampedArray(100 * 4).fill(255);
 			mockContext.getImageData.mockReturnValue({ data });
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const resultPromise = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onload();
 			const result = await resultPromise;
@@ -882,9 +899,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 			}
 			mockContext.getImageData.mockReturnValue({ data });
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const resultPromise = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onload();
 			const result = await resultPromise;
@@ -896,9 +912,8 @@ describe("InterceptionBlankScreenService static methods", () => {
 			const data = new Uint8ClampedArray(100 * 4).fill(250);
 			mockContext.getImageData.mockReturnValue({ data });
 
-			// biome-ignore lint/suspicious/noExplicitAny: access private static
 			const resultPromise = (
-				InterceptionBlankScreenService as any
+				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateScreenshotBlankScreen("mock-base64");
 			mockImage.onload();
 			const result = await resultPromise;

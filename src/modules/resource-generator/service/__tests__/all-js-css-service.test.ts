@@ -1,7 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer from "puppeteer";
-import type { CapturedResource } from "../../type";
+import type { CapturedResource, GenerateContext } from "../../type";
 import AllJsAndCssService from "../all-js-css-service";
+
+type ServiceWithInternals = AllJsAndCssService & {
+	filter: (ctx: GenerateContext) => Promise<GenerateContext>;
+	rank: (ctx: GenerateContext) => Promise<GenerateContext>;
+};
 
 jest.mock("puppeteer");
 jest.mock("@/utils/trace-context", () => ({
@@ -91,12 +96,13 @@ describe("AllJsAndCssService", () => {
 				},
 			];
 
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const ctx = {
+			const ctx: GenerateContext = {
 				url: "http://test.com",
 				capturedResources: resources,
-			} as any;
-			const filteredCtx = await (service as any).filter(ctx);
+			};
+			const filteredCtx = await (
+				service as unknown as ServiceWithInternals
+			).filter(ctx);
 
 			expect(filteredCtx.capturedResources).toHaveLength(2);
 			expect(
@@ -108,9 +114,13 @@ describe("AllJsAndCssService", () => {
 		});
 
 		test("should handle empty resources", async () => {
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const ctx = { url: "http://test.com", capturedResources: [] } as any;
-			const filteredCtx = await (service as any).filter(ctx);
+			const ctx: GenerateContext = {
+				url: "http://test.com",
+				capturedResources: [],
+			};
+			const filteredCtx = await (
+				service as unknown as ServiceWithInternals
+			).filter(ctx);
 			expect(filteredCtx.capturedResources).toHaveLength(0);
 		});
 	});
@@ -147,12 +157,13 @@ describe("AllJsAndCssService", () => {
 				},
 			];
 
-			// biome-ignore lint/suspicious/noExplicitAny: access protected method for test
-			const ctx = {
+			const ctx: GenerateContext = {
 				url: "http://test.com",
 				capturedResources: resources,
-			} as any;
-			const rankedCtx = await (service as any).rank(ctx);
+			};
+			const rankedCtx = await (service as unknown as ServiceWithInternals).rank(
+				ctx,
+			);
 
 			expect(rankedCtx.capturedResources).toHaveLength(3);
 			expect(rankedCtx.capturedResources[0].url).toBe("large.js");

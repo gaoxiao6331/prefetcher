@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer from "puppeteer";
+import type { GenerateContext } from "../../type";
 import BaseService from "../base";
 
 jest.mock("puppeteer");
@@ -36,11 +37,11 @@ function createMockPage() {
 
 // Test implementation of BaseService
 class TestService extends BaseService {
-	protected async filter(ctx: any) {
+	protected async filter(ctx: GenerateContext) {
 		return ctx;
 	}
 
-	protected async rank(ctx: any) {
+	protected async rank(ctx: GenerateContext) {
 		return ctx;
 	}
 

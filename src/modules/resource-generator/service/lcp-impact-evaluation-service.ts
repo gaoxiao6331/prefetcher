@@ -104,17 +104,17 @@ class LcpImpactEvaluationService extends AllJsService {
 	}
 
 	private async measureLcp(url: string): Promise<number | null> {
-		return this.measureLcpInternal(url, undefined);
+		return this.measureLcpInternal(url);
 	}
 
 	private async measureLcpWithDelay(
 		url: string,
-		resourceUrl: string,
+		delayResourceUrl: string,
 	): Promise<number | null> {
-		return this.measureLcpInternal(url, resourceUrl);
+		return this.measureLcpInternal(url, delayResourceUrl);
 	}
 
-	private async measureLcpInternal(
+	protected async measureLcpInternal(
 		url: string,
 		delayResourceUrl?: string,
 	): Promise<number | null> {
