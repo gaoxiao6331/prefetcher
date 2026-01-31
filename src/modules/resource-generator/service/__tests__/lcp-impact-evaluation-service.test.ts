@@ -24,15 +24,46 @@ const _LCP_THRESHOLD = 1000;
 
 // Helper function to create mock page
 function createMockPage() {
-	return {
+	const handlers = new Map<string, Set<(...args: unknown[]) => unknown>>();
+	const mock = {
 		on: jest.fn(),
-		goto: jest.fn(),
+		off: jest.fn(),
+		emit: (event: string, ...args: unknown[]) => {
+			const set = handlers.get(event);
+			if (set) {
+				for (const h of set) {
+					h(...args);
+				}
+			}
+		},
+		goto: jest.fn().mockResolvedValue(undefined),
 		evaluate: jest.fn(),
 		evaluateOnNewDocument: jest.fn(),
 		setRequestInterception: jest.fn(),
 		isClosed: jest.fn().mockReturnValue(false),
 		close: jest.fn(),
 	};
+
+	mock.on.mockImplementation(
+		(event: string, handler: (...args: unknown[]) => unknown) => {
+			const set = handlers.get(event);
+			if (set) {
+				set.add(handler);
+			} else {
+				handlers.set(event, new Set([handler]));
+			}
+			return mock;
+		},
+	);
+
+	mock.off.mockImplementation(
+		(event: string, handler: (...args: unknown[]) => unknown) => {
+			handlers.get(event)?.delete(handler);
+			return mock;
+		},
+	);
+
+	return mock;
 }
 
 type MockPage = ReturnType<typeof createMockPage>;
@@ -100,7 +131,6 @@ describe("LcpImpactEvaluationService", () => {
 
 	beforeEach(async () => {
 		jest.clearAllMocks();
-		jest.resetModules();
 		jest.useFakeTimers();
 
 		mockPage = createMockPage();
@@ -119,7 +149,6 @@ describe("LcpImpactEvaluationService", () => {
 	});
 
 	afterEach(async () => {
-		jest.useRealTimers();
 		(service as unknown as ServiceWithInternals).browser = null;
 		await service.close();
 	});
@@ -182,17 +211,24 @@ describe("LcpImpactEvaluationService", () => {
 			]);
 			expect(_evaluateLcpInBrowserContext()).toBeNull();
 		});
+
+		test("should return null when performance.getEntriesByType throws", () => {
+			mockWindow.__prefetcherLcp = undefined;
+			mockPerformance.getEntriesByType.mockImplementation(() => {
+				throw new Error("Performance error");
+			});
+			expect(_evaluateLcpInBrowserContext()).toBeNull();
+		});
 	});
 
 	describe("LcpImpactEvaluationService - setupDelayInterception", () => {
 		beforeEach(() => {
-			jest.resetModules();
-			jest.clearAllTimers();
 			mockPage.on.mockImplementation(
 				(event: string, handler: (req: MockRequest) => Promise<void>) => {
 					if (event === "request") {
 						requestHandler = handler;
 					}
+					return mockPage;
 				},
 			);
 			(service as unknown as ServiceWithInternals).setupDelayInterception(
@@ -201,7 +237,9 @@ describe("LcpImpactEvaluationService", () => {
 			);
 		});
 
-		afterEach(() => {});
+		afterEach(() => {
+			// No need to call useRealTimers here as it's handled at top level
+		});
 
 		test("should not intercept if request is already handled", async () => {
 			const mockRequest: MockRequest = {
@@ -223,7 +261,7 @@ describe("LcpImpactEvaluationService", () => {
 			await requestHandler(mockRequest);
 			expect(mockRequest.continue).not.toHaveBeenCalled();
 
-			jest.advanceTimersByTime(10000);
+			jest.advanceTimersByTime(20000);
 			await Promise.resolve(); // Flush microtask queue
 			expect(mockRequest.continue).toHaveBeenCalled();
 		});
@@ -246,7 +284,7 @@ describe("LcpImpactEvaluationService", () => {
 			};
 
 			await requestHandler(mockRequest);
-			jest.advanceTimersByTime(10000);
+			jest.advanceTimersByTime(20000);
 			await Promise.resolve(); // Flush microtask queue
 
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
@@ -312,7 +350,7 @@ describe("LcpImpactEvaluationService", () => {
 			);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.any(Error),
-				expect.stringContaining("[LCP] Failed to setup delay interception"),
+				expect.stringContaining("[LCP] Failed to set up delay interception"),
 			);
 		});
 
@@ -330,7 +368,7 @@ describe("LcpImpactEvaluationService", () => {
 				true,
 			);
 
-			jest.advanceTimersByTime(10000);
+			jest.advanceTimersByTime(20000);
 			await Promise.resolve();
 			expect(mockRequest.continue).not.toHaveBeenCalled();
 		});
@@ -353,7 +391,7 @@ describe("LcpImpactEvaluationService", () => {
 			);
 
 			// Advance remaining time
-			jest.advanceTimersByTime(9000);
+			jest.advanceTimersByTime(19000);
 			await Promise.resolve();
 			expect(mockRequest.continue).not.toHaveBeenCalled();
 		});
@@ -399,15 +437,14 @@ describe("LcpImpactEvaluationService", () => {
 				service as unknown as ServiceWithInternals,
 				"measureLcpInternal",
 			);
-			measureLcpInternalSpy.mockResolvedValueOnce(2000); // Baseline
-			measureLcpInternalSpy.mockResolvedValueOnce(3500); // Impacted
+			measureLcpInternalSpy.mockResolvedValueOnce(25000); // Critical (> 20000 * 0.9)
 
 			const result = await (service as unknown as ServiceWithInternals).filter(
 				ctx,
 			);
 			expect(result.capturedResources).toHaveLength(1);
 			expect(result.capturedResources[0].url).toBe(TEST_RESOURCE_URL);
-			expect(measureLcpInternalSpy).toHaveBeenCalledTimes(2);
+			expect(measureLcpInternalSpy).toHaveBeenCalledTimes(1);
 		});
 
 		test("should handle page close failure", async () => {
@@ -432,48 +469,15 @@ describe("LcpImpactEvaluationService", () => {
 	});
 
 	describe("filter", () => {
-		test("should measure baseline LCP", async () => {
-			const measureLcpSpy = jest
-				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
-				.mockResolvedValue(1500);
-
-			const ctx = createMockContext([
-				{ url: TEST_RESOURCE_URL, type: "script" } as CapturedResource,
-			]);
-			await (service as unknown as ServiceWithInternals).filter(ctx);
-
-			expect(measureLcpSpy).toHaveBeenCalledWith(TEST_URL);
-		});
-
-		test("should treat all resources as critical if baseline LCP fails", async () => {
-			const measureLcpSpy = jest
-				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
-				.mockResolvedValue(null);
-
-			const resources = [
-				{ url: TEST_RESOURCE_URL, type: "script" } as CapturedResource,
-			];
-			const ctx = createMockContext(resources);
-			const result = await (service as unknown as ServiceWithInternals).filter(
-				ctx,
-			);
-
-			expect(result.capturedResources).toEqual(resources);
-			expect(measureLcpSpy).toHaveBeenCalled();
-		});
-
 		test("should evaluate resource impact and filter non-critical ones", async () => {
-			jest
-				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
-				.mockResolvedValue(1000);
 			const measureLcpWithDelaySpy = jest
 				.spyOn(
 					service as unknown as ServiceWithInternals,
 					"measureLcpWithDelay",
 				)
 				.mockImplementation(async (_url, resourceUrl) => {
-					if (resourceUrl === TEST_RESOURCE_URL) return 2500; // Delta = 1500 (> 1000)
-					return 1500; // Delta = 500 (< 1000)
+					if (resourceUrl === TEST_RESOURCE_URL) return 25000; // Critical (> 20000 * 0.9)
+					return 5000; // Not critical
 				});
 
 			const resources = [
@@ -491,9 +495,6 @@ describe("LcpImpactEvaluationService", () => {
 		});
 
 		test("should treat resource as critical if its evaluation fails", async () => {
-			jest
-				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
-				.mockResolvedValue(1000);
 			jest
 				.spyOn(
 					service as unknown as ServiceWithInternals,
@@ -513,9 +514,6 @@ describe("LcpImpactEvaluationService", () => {
 		});
 
 		test("should treat resource as critical if error occurs during evaluation", async () => {
-			jest
-				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
-				.mockResolvedValue(1000);
 			jest
 				.spyOn(
 					service as unknown as ServiceWithInternals,
@@ -542,30 +540,17 @@ describe("LcpImpactEvaluationService", () => {
 			expect(result.capturedResources).toHaveLength(0);
 			expect(result.url).toBe(ctx.url);
 		});
-
-		test("should log error and proceed if baseline LCP measurement throws", async () => {
-			const measureLcpSpy = jest
-				.spyOn(service as unknown as ServiceWithInternals, "measureLcp")
-				.mockRejectedValue(new Error("Baseline failed"));
-
-			const resources = [
-				{ url: TEST_RESOURCE_URL, type: "script" } as CapturedResource,
-			];
-			const ctx = createMockContext(resources);
-			const result = await (service as unknown as ServiceWithInternals).filter(
-				ctx,
-			);
-
-			expect(result.capturedResources).toEqual(resources);
-			expect(measureLcpSpy).toHaveBeenCalled();
-			expect(fastifyMock.log.error).toHaveBeenCalledWith(
-				expect.any(Error),
-				"[LCP] Failed to measure baseline LCP",
-			);
-		});
 	});
 
 	describe("measureLcpInternal", () => {
+		beforeEach(() => {
+			jest.useRealTimers();
+		});
+
+		afterEach(() => {
+			jest.useFakeTimers();
+		});
+
 		test("should return LCP value on successful navigation", async () => {
 			mockPage.evaluate.mockResolvedValueOnce(2500);
 			const result = await (
@@ -588,11 +573,142 @@ describe("LcpImpactEvaluationService", () => {
 				service as unknown as ServiceWithInternals,
 				"setupDelayInterception",
 			);
-			await (service as unknown as ServiceWithInternals).measureLcpInternal(
-				TEST_URL,
-				TEST_RESOURCE_URL,
-			);
+
+			// Mock goto to emit the response event which resolves resourceFinishedPromise
+			mockPage.goto.mockImplementationOnce(async () => {
+				setTimeout(() => {
+					mockPage.emit("response", { url: () => TEST_RESOURCE_URL });
+				}, 10);
+			});
+
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
+
+			expect(result).toBe(2500);
 			expect(setupSpy).toHaveBeenCalledWith(mockPage, TEST_RESOURCE_URL);
+		});
+
+		test("should resolve resourceFinishedPromise if request fails", async () => {
+			mockPage.evaluate.mockResolvedValueOnce(2500);
+
+			// Trigger the event after a short delay
+			setTimeout(() => {
+				mockPage.emit("requestfailed", { url: () => TEST_RESOURCE_URL });
+			}, 10);
+
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
+
+			expect(result).toBe(2500);
+		});
+
+		test("should not resolve resourceFinishedPromise if different resource fails or responds", async () => {
+			mockPage.evaluate.mockResolvedValueOnce(2500);
+
+			// Trigger events after short delays
+			setTimeout(() => {
+				mockPage.emit("requestfailed", { url: () => "http://other.com" });
+				mockPage.emit("response", { url: () => "http://other.com" });
+
+				setTimeout(() => {
+					mockPage.emit("response", { url: () => TEST_RESOURCE_URL });
+				}, 10);
+			}, 10);
+
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
+
+			expect(result).toBe(2500);
+		}, 10000);
+
+		test("should resolve resourceFinishedPromise via 30s timeout", async () => {
+			// This test is hard with real timers because it takes 30s.
+			// Let's use fake timers just for this one.
+			jest.useFakeTimers();
+
+			mockPage.evaluate.mockResolvedValueOnce(2500);
+			const promise = (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
+
+			for (let i = 0; i < 50; i++) await Promise.resolve();
+
+			// Advance 30s for the resource timeout
+			jest.advanceTimersByTime(30000);
+			for (let i = 0; i < 50; i++) await Promise.resolve();
+
+			// Advance 500ms for the post-load wait
+			jest.advanceTimersByTime(1000);
+			for (let i = 0; i < 50; i++) await Promise.resolve();
+
+			const result = await promise;
+			expect(result).toBe(2500);
+		}, 10000);
+
+		test("should cover the case where finish is called before timeoutId is set", async () => {
+			// Use real timers for consistency
+			jest.useRealTimers();
+
+			mockPage.evaluate.mockResolvedValueOnce(2500);
+
+			// Modify mockPage.on to trigger event immediately for this test
+			const originalOn = mockPage.on.getMockImplementation();
+			mockPage.on.mockImplementation(
+				(event: string, handler: (...args: unknown[]) => unknown) => {
+					if (event === "response") {
+						// Trigger synchronously during the on() call
+						handler({ url: () => TEST_RESOURCE_URL });
+					}
+					if (originalOn) {
+						return originalOn(event, handler);
+					}
+					return mockPage;
+				},
+			);
+
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
+
+			expect(result).toBe(2500);
+
+			// Restore mock
+			if (originalOn) {
+				mockPage.on.mockImplementation(originalOn);
+			}
+		}, 10000);
+
+		test("should cover finish called twice", async () => {
+			mockPage.evaluate.mockResolvedValueOnce(2500);
+
+			// Modify mockPage.on to trigger event twice
+			const originalOn = mockPage.on.getMockImplementation();
+			mockPage.on.mockImplementation(
+				(event: string, handler: (...args: unknown[]) => unknown) => {
+					if (event === "response") {
+						// Trigger twice
+						handler({ url: () => TEST_RESOURCE_URL });
+						handler({ url: () => TEST_RESOURCE_URL });
+					}
+					if (originalOn) {
+						return originalOn(event, handler);
+					}
+					return mockPage;
+				},
+			);
+
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
+
+			expect(result).toBe(2500);
+
+			if (originalOn) {
+				mockPage.on.mockImplementation(originalOn);
+			}
 		});
 
 		test("should return null if evaluate returns non-number", async () => {
@@ -662,7 +778,7 @@ describe("LcpImpactEvaluationService", () => {
 			);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.any(Error),
-				expect.stringContaining("Failed to setup LCP observer"),
+				expect.stringContaining("Failed to set up LCP observer"),
 			);
 		});
 

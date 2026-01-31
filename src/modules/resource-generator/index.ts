@@ -1,16 +1,15 @@
 import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import routes from "./route";
-import InterceptionBlankScreenService from "./service/interception-blank-screen-service";
+import LcpImpactEvaluationService from "./service/lcp-impact-evaluation-service";
 import type { ResourceGeneratorService } from "./type";
 
 const resourceGeneratorModule: FastifyPluginAsync = async (fastify, _opts) => {
-	const interceptionBlankScreenService =
-		await InterceptionBlankScreenService.create(fastify);
-	fastify.decorate("resourceGeneratorService", interceptionBlankScreenService);
+	const service = await LcpImpactEvaluationService.create(fastify);
+	fastify.decorate("resourceGeneratorService", service);
 
 	fastify.addHook("onClose", async () => {
-		await interceptionBlankScreenService.close();
+		await service.close();
 	});
 
 	await fastify.register(routes);
