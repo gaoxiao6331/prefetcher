@@ -44,6 +44,23 @@ export class LcpImpactEvaluationService extends AllJsService {
 	/** LCP impact threshold: if delayed resource causes LCP to increase significantly */
 	private static readonly LCP_IMPACT_THRESHOLD_MS = 20_000;
 
+	/** Proximity ratio to consider a resource critical (90% of threshold) */
+	private static readonly CRITICAL_PROXIMITY_RATIO = 0.9;
+
+	/** Maximum concurrent LCP evaluation tasks */
+	private static readonly MAX_CONCURRENT_EVALUATIONS = 3;
+
+	/** Timeout for resource load completion fallback (Threshold + 10s buffer) */
+	private static readonly RESOURCE_LOAD_TIMEOUT_MS =
+		LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS + 10_000;
+
+	/** Timeout for page navigation (3x Threshold to allow for delay + normal loading) */
+	private static readonly PAGE_GOTO_TIMEOUT_MS =
+		LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS * 3;
+
+	/** Wait time for browser to process rendering after resource load */
+	private static readonly POST_LOAD_RENDER_WAIT_MS = 500;
+
 	/**
 	 * Filter resources: only keep critical resources that have a significant impact on LCP
 	 * @param ctx Generation context
@@ -60,7 +77,9 @@ export class LcpImpactEvaluationService extends AllJsService {
 		}
 
 		// Use semaphore to control concurrency and avoid high load from too many browser instances
-		const validationSemaphore = new Semaphore(3);
+		const validationSemaphore = new Semaphore(
+			LcpImpactEvaluationService.MAX_CONCURRENT_EVALUATIONS,
+		);
 
 		// 1. Evaluate impact for each resource concurrently
 		const tasks = resources.map((resource: CapturedResource) =>
@@ -83,7 +102,8 @@ export class LcpImpactEvaluationService extends AllJsService {
 					// We use 0.9 as the "proximity" ratio (90% of the threshold).
 					const isCritical =
 						impactedLcp >=
-						LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS * 0.9;
+						LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS *
+							LcpImpactEvaluationService.CRITICAL_PROXIMITY_RATIO;
 
 					this.log.info(
 						`[LCP] Resource: ${resource.url}, Impacted LCP: ${impactedLcp}ms, Critical: ${isCritical}`,
@@ -174,7 +194,10 @@ export class LcpImpactEvaluationService extends AllJsService {
 
 				// 30s fallback to prevent hanging if the resource is never requested
 				if (!finished) {
-					timeoutId = setTimeout(finish, 30000);
+					timeoutId = setTimeout(
+						finish,
+						LcpImpactEvaluationService.RESOURCE_LOAD_TIMEOUT_MS,
+					);
 				}
 			});
 		}
@@ -188,7 +211,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 			// networkidle2 might trigger in 0.5s before our 10s delay finishes.
 			await page.goto(url, {
 				waitUntil: "networkidle2",
-				timeout: 60000,
+				timeout: LcpImpactEvaluationService.PAGE_GOTO_TIMEOUT_MS,
 			});
 
 			if (delayResourceUrl) {
@@ -197,7 +220,12 @@ export class LcpImpactEvaluationService extends AllJsService {
 				// preventing the resource from ever finishing.
 				await resourceFinishedPromise;
 				// Give the browser some extra time to handle rendering and LCP calculation after resource load
-				await new Promise((resolve) => setTimeout(resolve, 500));
+				await new Promise((resolve) =>
+					setTimeout(
+						resolve,
+						LcpImpactEvaluationService.POST_LOAD_RENDER_WAIT_MS,
+					),
+				);
 			}
 		} catch (error) {
 			this.log.error(error, `[LCP] Failed to navigate to page: ${url}`);
