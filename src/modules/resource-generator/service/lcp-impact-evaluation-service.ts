@@ -4,17 +4,20 @@ import type { CapturedResource, GenerateContext } from "../type";
 import AllJsService from "./all-js-service";
 
 export function _evaluateLcpInBrowserContext(): number | null {
-	console.log("Executing _evaluateLcpInBrowserContext");
-	const value = (window as any).__prefetcherLcp;
+	const win = window as unknown as {
+		__prefetcherLcp?: number;
+		performance: Performance;
+	};
+	const value = win.__prefetcherLcp;
 	if (typeof value === "number" && !Number.isNaN(value)) {
-		return value as number;
+		return value;
 	}
-	const entries = performance.getEntriesByType(
-		"largest-contentful-paint",
-	) as PerformanceEntry[];
-	const last = entries[entries.length - 1] as any;
+	const entries = win.performance.getEntriesByType("largest-contentful-paint");
+	const last = entries[entries.length - 1] as
+		| (PerformanceEntry & { startTime: number })
+		| undefined;
 	if (last && typeof last.startTime === "number") {
-		return last.startTime as number;
+		return last.startTime;
 	}
 	return null;
 }
@@ -63,7 +66,8 @@ class LcpImpactEvaluationService extends AllJsService {
 						return true;
 					}
 
-					const delta = impactedLcp - baselineLcp!;
+					// baselineLcp is checked at line 44 to be non-null
+					const delta = impactedLcp - baselineLcp;
 					const isCritical =
 						delta >= LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS;
 
@@ -140,56 +144,71 @@ class LcpImpactEvaluationService extends AllJsService {
 	}
 
 	private setupDelayInterception(page: Page, resourceUrl: string) {
-		page.on("request", (req) => {
-			try {
-				if (req.isInterceptResolutionHandled()) return;
+		try {
+			page.on("request", (req) => {
+				try {
+					if (req.isInterceptResolutionHandled()) return;
 
-				if (req.url() === resourceUrl) {
-					setTimeout(() => {
-						if (req.isInterceptResolutionHandled()) {
-							return;
-						}
+					if (req.url() === resourceUrl) {
+						setTimeout(() => {
+							if (req.isInterceptResolutionHandled()) {
+								return;
+							}
+							req.continue().catch((err: Error) => {
+								this.log.warn(`[LCP] Request handling failed: ${err.message}`);
+							});
+						}, 10000);
+					} else {
 						req.continue().catch((err: Error) => {
 							this.log.warn(`[LCP] Request handling failed: ${err.message}`);
 						});
-					}, 10000);
-				} else {
-					req.continue().catch((err: Error) => {
-						this.log.warn(`[LCP] Request handling failed: ${err.message}`);
-					});
+					}
+				} catch (err) {
+					this.log.warn(`[LCP] Request handling failed: ${err}`);
 				}
-			} catch (err) {
-				this.log.warn(`[LCP] Request handling failed: ${err}`);
-			}
-		});
+			});
+		} catch (error) {
+			this.log.warn(error, "[LCP] Failed to setup delay interception");
+		}
 	}
 
 	private async setupLcpObserver(page: Page) {
-		await page.evaluateOnNewDocument(() => {
-			try {
-				(window as any).__prefetcherLcp = null;
-				const observer = new PerformanceObserver((entryList) => {
-					const entries = entryList.getEntries();
-					const last = entries[entries.length - 1] as any;
-					if (last && typeof last.startTime === "number") {
-						(window as any).__prefetcherLcp = last.startTime;
-					}
-				});
-				observer.observe({ type: "largest-contentful-paint", buffered: true });
-
-				window.addEventListener(
-					"visibilitychange",
-					() => {
-						if (document.visibilityState === "hidden") {
-							observer.disconnect();
+		try {
+			await page.evaluateOnNewDocument(() => {
+				try {
+					// biome-ignore lint/suspicious/noExplicitAny: browser context
+					(window as any).__prefetcherLcp = null;
+					const observer = new PerformanceObserver((entryList) => {
+						const entries = entryList.getEntries();
+						// biome-ignore lint/suspicious/noExplicitAny: browser context
+						const last = entries[entries.length - 1] as any;
+						if (last && typeof last.startTime === "number") {
+							// biome-ignore lint/suspicious/noExplicitAny: browser context
+							(window as any).__prefetcherLcp = last.startTime;
 						}
-					},
-					{ once: true },
-				);
-			} catch (error) {
-				(window as any).__prefetcherLcpError = error;
-			}
-		});
+					});
+					observer.observe({
+						type: "largest-contentful-paint",
+						buffered: true,
+					});
+
+					window.addEventListener(
+						"visibilitychange",
+						() => {
+							if (document.visibilityState === "hidden") {
+								observer.disconnect();
+							}
+						},
+						{ once: true },
+					);
+				} catch (error) {
+					// biome-ignore lint/suspicious/noExplicitAny: browser context
+					(window as any).__prefetcherLcpError = error;
+				}
+			});
+		} catch (err) {
+			this.log.warn(err, "[LCP] Failed to setup LCP observer");
+		}
 	}
 }
 

@@ -1,7 +1,9 @@
 import { isDebugMode, isTsNode } from "../is";
 
 describe("is helper", () => {
+	// biome-ignore lint/suspicious/noExplicitAny: test helper
 	const originalGlobal = globalThis as any;
+	// biome-ignore lint/suspicious/noExplicitAny: test helper
 	let originalStartParams: any;
 	const tsNodeSymbol = Symbol.for("ts-node.register.instance");
 	type ProcessWithTsNode = NodeJS.Process & { [key: symbol]: unknown };

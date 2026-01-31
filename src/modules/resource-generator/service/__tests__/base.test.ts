@@ -148,6 +148,23 @@ describe("BaseService", () => {
 			// biome-ignore lint/suspicious/noExplicitAny: access private
 			expect((service as any).browser).toBeNull();
 		});
+
+		test("should log error if browser close fails", async () => {
+			const mockBrowser = createMockBrowser();
+			mockBrowser.close.mockRejectedValueOnce(new Error("Close error"));
+			const service = new TestService(fastifyMock);
+			// biome-ignore lint/suspicious/noExplicitAny: access private
+			(service as any).browser = mockBrowser;
+
+			await service.close();
+
+			expect(fastifyMock.log.error).toHaveBeenCalledWith(
+				expect.any(Error),
+				"Failed to close browser",
+			);
+			// biome-ignore lint/suspicious/noExplicitAny: access private
+			expect((service as any).browser).toBeNull();
+		});
 	});
 
 	describe("Page Management", () => {
@@ -167,6 +184,27 @@ describe("BaseService", () => {
 			expect(mockBrowser.newPage).toHaveBeenCalled();
 			expect(mockPage.setRequestInterception).toHaveBeenCalledWith(true);
 			expect(pageObj.page).toBe(mockPage);
+		});
+
+		test("should log warning if page close fails during disposal", async () => {
+			const mockPage = createMockPage();
+			mockPage.close.mockRejectedValueOnce(new Error("Page close error"));
+			const mockBrowser = createMockBrowser(true);
+			mockBrowser.newPage.mockResolvedValue(mockPage);
+
+			const service = new TestService(fastifyMock);
+			// biome-ignore lint/suspicious/noExplicitAny: access private
+			(service as any).browser = mockBrowser;
+
+			const pageObj = await service.triggerGetPage();
+
+			// Trigger disposal
+			await pageObj[Symbol.asyncDispose]();
+
+			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
+				expect.any(Error),
+				"Failed to close page",
+			);
 		});
 	});
 });

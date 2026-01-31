@@ -81,9 +81,14 @@ abstract class BaseService implements ResourceGeneratorService {
 	// Public close method to be called on shutdown
 	async close() {
 		if (this.browser) {
-			await this.browser.close();
-			this.browser = null;
-			this.log.info("Puppeteer browser closed");
+			try {
+				await this.browser.close();
+				this.log.info("Puppeteer browser closed");
+			} catch (error) {
+				this.log.error(error, "Failed to close browser");
+			} finally {
+				this.browser = null;
+			}
 		}
 	}
 
@@ -102,9 +107,13 @@ abstract class BaseService implements ResourceGeneratorService {
 
 		return {
 			page,
-			async [Symbol.asyncDispose]() {
-				if (!page.isClosed()) {
-					await page.close();
+			[Symbol.asyncDispose]: async () => {
+				try {
+					if (!page.isClosed()) {
+						await page.close();
+					}
+				} catch (error) {
+					this.log.warn(error, "Failed to close page");
 				}
 			},
 		};

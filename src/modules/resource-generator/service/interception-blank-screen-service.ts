@@ -117,54 +117,58 @@ class InterceptionBlankScreenService extends AllJsService {
 	}
 
 	private static _evaluateDomBlankScreen() {
-		// 1. Define sampling points (10x10 grid across viewport, avoiding extreme edges)
-		const samplingPoints = 10;
-		const nodes = [];
-		const vW = window.innerWidth;
-		const vH = window.innerHeight;
+		try {
+			// 1. Define sampling points (10x10 grid across viewport, avoiding extreme edges)
+			const samplingPoints = 10;
+			const nodes = [];
+			const vW = window.innerWidth;
+			const vH = window.innerHeight;
 
-		// 2. Sample the distribution across the central area
-		for (let i = 1; i <= samplingPoints; i++) {
-			for (let j = 1; j <= samplingPoints; j++) {
-				const x = (vW * i) / (samplingPoints + 1);
-				const y = (vH * j) / (samplingPoints + 1);
+			// 2. Sample the distribution across the central area
+			for (let i = 1; i <= samplingPoints; i++) {
+				for (let j = 1; j <= samplingPoints; j++) {
+					const x = (vW * i) / (samplingPoints + 1);
+					const y = (vH * j) / (samplingPoints + 1);
 
-				// Get the topmost element at this coordinate
-				const elements = document.elementsFromPoint(x, y);
-				if (elements && elements.length > 0) {
-					nodes.push(elements[0]);
+					// Get the topmost element at this coordinate
+					const elements = document.elementsFromPoint(x, y);
+					if (elements && elements.length > 0) {
+						nodes.push(elements[0]);
+					}
 				}
 			}
+
+			if (nodes.length === 0) {
+				return { decided: true, blankRate: 100 }; // If no nodes, it's 100% blank
+			}
+
+			// 3. Define "blank" container selectors
+			// If the topmost element is still body or html, the point is considered blank
+			const blankSelector = ["html", "body", "#app", "#root"];
+
+			// 4. Filter nodes and compute the proportion of blank points
+			const blankPoints = nodes.filter((node) => {
+				if (!node) return true;
+				// 判断是否是空白容器
+				const el = node as Element;
+				return blankSelector.some((sel) => el.matches(sel));
+			}).length;
+
+			const blankRate = (blankPoints / nodes.length) * 100;
+
+			// 5. Decision threshold: if over 90% of points match container selectors, treat as blank screen
+			// If blankRate is very high or very low, we can decide based on DOM
+			if (blankRate >= 90) {
+				return { decided: true, blankRate: blankRate };
+			}
+			if (blankRate <= 10) {
+				return { decided: true, blankRate: blankRate };
+			}
+			// Otherwise, it's undecided by DOM alone
+			return { decided: false, blankRate: blankRate };
+		} catch (_err) {
+			return { decided: false, blankRate: 0 };
 		}
-
-		if (nodes.length === 0) {
-			return { decided: true, blankRate: 100 }; // If no nodes, it's 100% blank
-		}
-
-		// 3. Define "blank" container selectors
-		// If the topmost element is still body or html, the point is considered blank
-		const blankSelector = ["html", "body", "#app", "#root"];
-
-		// 4. Filter nodes and compute the proportion of blank points
-		const blankPoints = nodes.filter((node) => {
-			if (!node) return true;
-			// 判断是否是空白容器
-			const el = node as Element;
-			return blankSelector.some((sel) => el.matches(sel));
-		}).length;
-
-		const blankRate = (blankPoints / nodes.length) * 100;
-
-		// 5. Decision threshold: if over 90% of points match container selectors, treat as blank screen
-		// If blankRate is very high or very low, we can decide based on DOM
-		if (blankRate >= 90) {
-			return { decided: true, blankRate: blankRate };
-		}
-		if (blankRate <= 10) {
-			return { decided: true, blankRate: blankRate };
-		}
-		// Otherwise, it's undecided by DOM alone
-		return { decided: false, blankRate: blankRate };
 	}
 
 	private async isBlankScreen(
