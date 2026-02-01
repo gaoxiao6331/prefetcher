@@ -42,7 +42,7 @@ abstract class BaseService implements ResourceGeneratorService {
 	// Limit concurrent pages to avoid crashing the server
 	protected readonly semaphore = new Semaphore(BaseService.MAX_CONCURRENT_PAGES);
 
-	protected constructor(protected readonly fastify: FastifyInstance) {}
+	constructor(protected readonly fastify: FastifyInstance) {}
 
 	/**
 	 * Get logger, prioritize logger with traceId

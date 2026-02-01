@@ -2,7 +2,8 @@ import cdnUpdaterModule from "@/modules/cdn-updater";
 import notifierModule from "@/modules/notifier";
 import resourceGeneratorModule from "@/modules/resource-generator";
 import createFastifyInstance from "@/utils/create-fastify-instance";
-import { isDebugMode } from "./utils/is";
+import { isDebugMode } from "@/utils/is";
+import { exec } from "child_process";
 
 export interface StartParams {
 	debug?: boolean;
@@ -10,6 +11,15 @@ export interface StartParams {
 
 export const start = async (params: StartParams) => {
 	globalThis.startParams = params;
+
+	if(isDebugMode()) {
+		// kill process on port 3000
+		try {
+			await exec("kill -9 $(lsof -t -i:3000)");
+		} catch (err) {
+			console.error("Failed to kill process on port 3000:", err);
+		}
+	}
 
 	const fastify = await createFastifyInstance();
 

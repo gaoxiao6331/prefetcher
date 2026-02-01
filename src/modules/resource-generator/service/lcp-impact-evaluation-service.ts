@@ -207,15 +207,15 @@ export class LcpImpactEvaluationService extends AllJsService {
 			}
 
 			// Wait up to 30s for LCP value to be set
-			try {
-				await page.waitForFunction(() => {
-					return window.__prefetcherLcp !== null || window.__prefetcherLcpError;
-				}, {
-					timeout: 30000,
-				});
-			} catch (e) {
-				this.log.debug(`[LCP] Timeout/Error waiting for LCP value to be set for ${url}`);
-			}
+			// try {
+			// 	await page.waitForFunction(() => {
+			// 		return window.__prefetcherLcp !== null || window.__prefetcherLcpError;
+			// 	}, {
+			// 		timeout: 30000,
+			// 	});
+			// } catch (e) {
+			// 	this.log.debug(`[LCP] Timeout/Error waiting for LCP value to be set for ${url}`);
+			// }
 
 			const lcpResult = await page.evaluate(function () {
 				if (window.__prefetcherLcp !== null) return window.__prefetcherLcp;
