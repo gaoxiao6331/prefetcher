@@ -108,6 +108,20 @@ abstract class BaseService implements ResourceGeneratorService {
 		}
 
 		const page = await this.browser.newPage();
+
+		// Forward browser console logs to our logger
+		page.on("console", (msg) => {
+			const type = msg.type();
+			const text = msg.text();
+			if (type === "error") {
+				this.log.error(`[Browser] ${text}`);
+			} else if (type === "warn") {
+				this.log.warn(`[Browser] ${text}`);
+			} else if (isDebugMode()) {
+				this.log.debug(`[Browser] ${text}`);
+			}
+		});
+
 		await page.setRequestInterception(true);
 
 		return {

@@ -34,7 +34,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 		LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS * 3;
 
 	/** Wait time for browser to process rendering after resource load */
-	private static readonly POST_LOAD_RENDER_WAIT_MS = 2_000;
+	private static readonly POST_LOAD_RENDER_WAIT_MS = 60_000;
 
 	/**
 	 * Filter resources: only keep critical resources that have a significant impact on LCP
@@ -126,6 +126,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 		delayResourceUrl?: string,
 	): Promise<number | null> {
 		// Use "await using" for automatic page resource disposal
+		// TODO
 		const  pageObj = await this.getPage();
 		const page = pageObj.page as Page;
 
@@ -136,6 +137,10 @@ export class LcpImpactEvaluationService extends AllJsService {
 		if (delayResourceUrl) {
 			await page.setRequestInterception(true);
 			this.setupDelayInterception(page, delayResourceUrl);
+
+			await page.evaluateOnNewDocument((url) => {
+				console.log(`Delaying resource load: ${url}`);
+			}, delayResourceUrl);
 
 			// Create a Promise to listen for the target resource's response completion or request failure
 			resourceFinishedPromise = new Promise<boolean>((resolve) => {
@@ -186,7 +191,9 @@ export class LcpImpactEvaluationService extends AllJsService {
 				timeout: LcpImpactEvaluationService.PAGE_GOTO_TIMEOUT_MS,
 			});
 
-			this.log.debug(`page goto ready time: ${Date()}`);
+			this.log.debug(
+				`[LCP] Page goto ready for ${url}. DelayResource: ${delayResourceUrl || "none"}`,
+			);
 
 			if (delayResourceUrl) {
 				// Core fix: explicitly wait for the resource to finish loading if it's being delayed
@@ -207,8 +214,31 @@ export class LcpImpactEvaluationService extends AllJsService {
 		}
 
 		// Execute script in browser context to retrieve LCP value
+		// Wait for LCP value to be set, as PerformanceObserver callback might be slightly delayed after load
+		try {
+			await page.waitForFunction(() => window.__prefetcherLcp !== null || window.__prefetcherLcpError, {
+				timeout: 5000,
+			});
+		} catch (e) {
+			this.log.debug(`[LCP] Timeout waiting for LCP value to be set for ${url}`);
+		}
+
 		const lcp = await page.evaluate(function () {
-			return window.__prefetcherLcp;
+			if (window.__prefetcherLcp !== null) return window.__prefetcherLcp;
+			if (window.__prefetcherLcpError) throw window.__prefetcherLcpError;
+
+			// Fallback: check performance buffer directly
+			// Note: getEntriesByType('largest-contentful-paint') might trigger a deprecation warning in some browsers
+			try {
+				const entries = performance.getEntriesByType("largest-contentful-paint");
+				if (entries.length > 0) {
+					const last = entries[entries.length - 1] as any;
+					return last.renderTime || last.startTime;
+				}
+			} catch (e) {
+				console.warn('[LCP] Fallback getEntriesByType failed', e);
+			}
+			return null;
 		});
 
 		return typeof lcp === "number" ? lcp : null;
@@ -266,16 +296,22 @@ export class LcpImpactEvaluationService extends AllJsService {
 				try {
 					window.__prefetcherLcp = null;
 
+					if (!window.PerformanceObserver || !PerformanceObserver.supportedEntryTypes || !PerformanceObserver.supportedEntryTypes.includes('largest-contentful-paint')) {
+						console.log('[LCP Observer] LCP not supported via PerformanceObserver');
+						return;
+					}
+
 					// Create PerformanceObserver to listen for largest-contentful-paint events
 					const observer = new PerformanceObserver((entryList) => {
 						const entries = entryList.getEntries();
-						console.log('LCP time', Date(), entries);
-						const last = entries[entries.length - 1] as
-							| (PerformanceEntry & { startTime: number })
-							| undefined;
-						if (last && typeof last.startTime === "number") {
-							// Record the latest LCP time
-							window.__prefetcherLcp = last.startTime;
+						const last = entries[entries.length - 1] as any;
+						if (last) {
+							const value = last.renderTime || last.startTime;
+							if (typeof value === "number") {
+								console.log(`[LCP Observer] New entry:`, last);
+								// Record the latest LCP time
+								window.__prefetcherLcp = value;
+							}
 						}
 					});
 
@@ -283,6 +319,8 @@ export class LcpImpactEvaluationService extends AllJsService {
 						type: "largest-contentful-paint",
 						buffered: true,
 					});
+
+					console.log('[LCP Observer] Started');
 				} catch (error) {
 					// Record script execution error
 					window.__prefetcherLcpError = error;
