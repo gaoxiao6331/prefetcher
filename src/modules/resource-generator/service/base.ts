@@ -1,5 +1,5 @@
 import path from "node:path";
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import puppeteer, {
 	type Browser,
@@ -10,7 +10,7 @@ import { PUPPETEER_EXECUTABLE_PATH } from "@/env";
 import { isDebugMode } from "@/utils/is";
 
 import { Semaphore } from "@/utils/semaphore";
-import { bindAsyncContext, getLogger } from "@/utils/trace-context";
+import { bindAsyncContext, getLogger, getTraceId } from "@/utils/trace-context";
 import type {
 	CapturedResource,
 	GenerateContext,
@@ -40,6 +40,8 @@ abstract class BaseService implements ResourceGeneratorService {
 
 	/** Global flag to prevent concurrent tracing sessions in the same browser */
 	private static isGlobalTracingActive = false;
+
+	protected readonly BROWSER_TRACE_DIR_COUNT_THRESHOLD = 5;
 
 	protected browser: Browser | null = null;
 	// Limit concurrent pages to avoid crashing the server
@@ -163,13 +165,25 @@ abstract class BaseService implements ResourceGeneratorService {
 			}
 		};
 
-		if (isDebugMode() && !BaseService.isGlobalTracingActive) {
+		if (!BaseService.isGlobalTracingActive) {
 			BaseService.isGlobalTracingActive = true;
 			isTracingStartedByThisPage = true;
 
-			const tracesDir = path.resolve(process.cwd(), "traces");
-			if (!fs.existsSync(tracesDir)) {
-				fs.mkdirSync(tracesDir, { recursive: true });
+			const traceId = getTraceId() || "unknown-trace";
+
+			const baseDir = "browser-traces";
+
+			// up to BROWSER_TRACE_DIR_COUNT_THRESHOLD dirs
+			const traceDirs = await fs.readdir(baseDir);
+			await Promise.all(
+				traceDirs.slice(this.BROWSER_TRACE_DIR_COUNT_THRESHOLD).map((dir) => fs.rm(path.resolve(baseDir, dir), { recursive: true })),
+			);
+
+			const tracesDir = path.resolve(baseDir, traceId);
+			try {
+				await fs.access(tracesDir);
+			} catch {
+				await fs.mkdir(tracesDir, { recursive: true });
 			}
 
 			// Sanitize trace name if provided
@@ -179,7 +193,7 @@ abstract class BaseService implements ResourceGeneratorService {
 
 			const tracePath = path.join(
 				tracesDir,
-				`${tracePrefix}-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
+				`${tracePrefix}.json`,
 			);
 
 			try {
@@ -248,7 +262,9 @@ abstract class BaseService implements ResourceGeneratorService {
 			const requestStartTimeMap = new Map();
 			const capturedResources: CapturedResource[] = [];
 
-			await using pageObj = await this.getPage();
+			await using pageObj = await this.getPage({
+				traceName: `capture-${url}`,
+			});
 			const page = pageObj.page;
 
 			// Request interception already enabled in getPage()
