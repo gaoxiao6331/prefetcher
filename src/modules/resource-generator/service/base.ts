@@ -1,3 +1,5 @@
+import path from "node:path";
+import fs from "node:fs";
 import type { FastifyInstance } from "fastify";
 import puppeteer, {
 	type Browser,
@@ -18,9 +20,30 @@ import type {
 abstract class BaseService implements ResourceGeneratorService {
 	protected readonly requestHeader = "x-prefetcher-req-id";
 
+	/** Maximum concurrent browser pages to avoid resource exhaustion */
+	protected static readonly MAX_CONCURRENT_PAGES = 5;
+
+	/** Default timeout for page navigation */
+	protected static readonly DEFAULT_PAGE_GOTO_TIMEOUT_MS = 30_000;
+
+	/** Wait time for all resources to be ready after page load */
+	protected static readonly RESOURCE_READY_WAIT_MS = 5_000;
+
+	/** Bytes per Kilobyte */
+	protected static readonly BYTES_PER_KB = 1024;
+
+	/** HTTP Status OK */
+	protected static readonly HTTP_STATUS_OK = 200;
+
+	/** HTTP Status Multiple Choices (Start of 3xx) */
+	protected static readonly HTTP_STATUS_MULTIPLE_CHOICES = 300;
+
+	/** Global flag to prevent concurrent tracing sessions in the same browser */
+	private static isGlobalTracingActive = false;
+
 	protected browser: Browser | null = null;
-	// Limit concurrent pages to 5 to avoid crashing the server
-	protected readonly semaphore = new Semaphore(5);
+	// Limit concurrent pages to avoid crashing the server
+	protected readonly semaphore = new Semaphore(BaseService.MAX_CONCURRENT_PAGES);
 
 	constructor(protected readonly fastify: FastifyInstance) {}
 
@@ -97,7 +120,7 @@ abstract class BaseService implements ResourceGeneratorService {
 		}
 	}
 
-	protected async getPage() {
+	protected async getPage(options?: { traceName?: string }) {
 		if (!this.browser || !this.browser.connected) {
 			this.log.warn("Browser not connected, re-initializing...");
 			await this.initBrowser();
@@ -124,10 +147,82 @@ abstract class BaseService implements ResourceGeneratorService {
 
 		await page.setRequestInterception(true);
 
+		// Record performance in debug mode
+		let isTracingStartedByThisPage = false;
+		const stopTracing = async () => {
+			if (isTracingStartedByThisPage) {
+				try {
+					await page.tracing.stop();
+					this.log.debug("[Browser] Performance tracing stopped and saved");
+				} catch (err) {
+					this.log.warn(`[Browser] Failed to stop tracing: ${err}`);
+				} finally {
+					isTracingStartedByThisPage = false;
+					BaseService.isGlobalTracingActive = false;
+				}
+			}
+		};
+
+		if (isDebugMode() && !BaseService.isGlobalTracingActive) {
+			BaseService.isGlobalTracingActive = true;
+			isTracingStartedByThisPage = true;
+
+			const tracesDir = path.resolve(process.cwd(), "traces");
+			if (!fs.existsSync(tracesDir)) {
+				fs.mkdirSync(tracesDir, { recursive: true });
+			}
+
+			// Sanitize trace name if provided
+			const tracePrefix = options?.traceName
+				? options.traceName.replace(/[^a-z0-9]/gi, "-").toLowerCase()
+				: "trace";
+
+			const tracePath = path.join(
+				tracesDir,
+				`${tracePrefix}-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
+			);
+
+			try {
+				await page.tracing.start({
+					path: tracePath,
+					screenshots: true,
+					categories: [
+						"-*", // Start with nothing
+						"toplevel",
+						"v8.execute",
+						"blink.console",
+						"blink.user_timing",
+						"benchmark",
+						"loading",
+						"devtools.timeline",
+						"disabled-by-default-devtools.timeline",
+						"disabled-by-default-devtools.timeline.frame",
+						"disabled-by-default-devtools.timeline.stack",
+						"disabled-by-default-devtools.screenshot",
+						"disabled-by-default-v8.cpu_profiler",
+						"disabled-by-default-v8.cpu_profiler.hires",
+						"latencyInfo",
+						"cc",
+						"gpu",
+						"devtools.timeline.layers",
+						"devtools.timeline.picture",
+						"disabled-by-default-devtools.timeline.layers",
+					],
+				});
+				this.log.debug(`[Browser] Performance tracing started: ${tracePath}`);
+			} catch (err) {
+				BaseService.isGlobalTracingActive = false;
+				isTracingStartedByThisPage = false;
+				this.log.warn(`[Browser] Failed to start tracing: ${err}`);
+			}
+		}
+
 		return {
 			page,
+			stopTracing,
 			[Symbol.asyncDispose]: async () => {
 				try {
+					await stopTracing();
 					if (!page.isClosed()) {
 						await page.close();
 					}
@@ -215,12 +310,12 @@ abstract class BaseService implements ResourceGeneratorService {
 
 						const status = response.status();
 						// Only record successful requests (2xx)
-						if (status < 200 || status >= 300) return;
+						if (status < BaseService.HTTP_STATUS_OK || status >= BaseService.HTTP_STATUS_MULTIPLE_CHOICES) return;
 
 						let resourceSizeKB = 0;
 						try {
 							const buffer = await response.buffer();
-							resourceSizeKB = buffer.length / 1024;
+							resourceSizeKB = buffer.length / BaseService.BYTES_PER_KB;
 						} catch (_e) {
 							// Ignored: Buffer access might fail for various reasons (CORS, etc.)
 						}
@@ -244,8 +339,10 @@ abstract class BaseService implements ResourceGeneratorService {
 				}),
 			);
 
-			// networkidle2: consider navigation finished when there are no more than 2 network connections for at least 500ms
-			await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+			await page.goto(url, { waitUntil: "networkidle0", timeout: BaseService.DEFAULT_PAGE_GOTO_TIMEOUT_MS });
+
+			// wait for all resource loaded
+			await new Promise((resolve) => setTimeout(resolve, BaseService.RESOURCE_READY_WAIT_MS));
 
 			const ctx: GenerateContext = {
 				url,

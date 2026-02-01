@@ -4,6 +4,7 @@ dist
 .DS_Store
 .idea
 coverage
+browser-traces
 
 # Keep the dist folder under examples/b
 !examples/b/dist/

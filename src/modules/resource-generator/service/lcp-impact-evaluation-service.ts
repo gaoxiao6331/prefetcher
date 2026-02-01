@@ -1,6 +1,8 @@
 import type { HTTPRequest, HTTPResponse, Page } from "puppeteer";
+import path from "node:path";
 import { Semaphore } from "@/utils/semaphore";
 import { bindAsyncContext } from "@/utils/trace-context";
+import { isDebugMode } from "@/utils/is";
 import type { CapturedResource, GenerateContext } from "../type";
 import AllJsService from "./all-js-service";
 
@@ -34,7 +36,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 		LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS * 3;
 
 	/** Wait time for browser to process rendering after resource load */
-	private static readonly POST_LOAD_RENDER_WAIT_MS = 60_000;
+	private static readonly POST_LOAD_RENDER_WAIT_MS = 2_000;
 
 	/**
 	 * Filter resources: only keep critical resources that have a significant impact on LCP
@@ -45,6 +47,8 @@ export class LcpImpactEvaluationService extends AllJsService {
 	): Promise<GenerateContext> {
 		const baseCtx = ctx;
 		const resources = baseCtx.capturedResources;
+
+		this.log.debug(`[LCP] base resources: ${JSON.stringify(baseCtx)}`);
 
 		// Return early if no resources were captured
 		if (!resources.length) {
@@ -125,9 +129,11 @@ export class LcpImpactEvaluationService extends AllJsService {
 		url: string,
 		delayResourceUrl?: string,
 	): Promise<number | null> {
-		// Use "await using" for automatic page resource disposal
-		// TODO
-		const  pageObj = await this.getPage();
+		const traceName = delayResourceUrl
+			? `lcp-delay-${path.basename(delayResourceUrl)}`
+			: "lcp-baseline";
+
+		await using pageObj = await this.getPage({ traceName });
 		const page = pageObj.page as Page;
 
 		// Used to ensure the delayed resource has actually finished loading
@@ -160,12 +166,12 @@ export class LcpImpactEvaluationService extends AllJsService {
 					page.off("requestfailed", onRequestFailed);
 					resolve(true);
 				};
-				const onResponse = bindAsyncContext((res: HTTPResponse) => {
+				const onResponse = (res: HTTPResponse) => {
 					if (res.url() === delayResourceUrl) finish();
-				});
-				const onRequestFailed = bindAsyncContext((req: HTTPRequest) => {
+				};
+				const onRequestFailed = (req: HTTPRequest) => {
 					if (req.url() === delayResourceUrl) finish();
-				});
+				};
 				page.on("response", onResponse);
 				page.on("requestfailed", onRequestFailed);
 
@@ -184,8 +190,6 @@ export class LcpImpactEvaluationService extends AllJsService {
 
 		try {
 			// Navigate to the target page and wait for network idle
-			// Note: networkidle2 allows up to 0 active connections. If we only delay 1 resource,
-			// networkidle2 might trigger in 0.5s before our 10s delay finishes.
 			await page.goto(url, {
 				waitUntil: "networkidle0",
 				timeout: LcpImpactEvaluationService.PAGE_GOTO_TIMEOUT_MS,
@@ -196,9 +200,6 @@ export class LcpImpactEvaluationService extends AllJsService {
 			);
 
 			if (delayResourceUrl) {
-				// Core fix: explicitly wait for the resource to finish loading if it's being delayed
-				// Otherwise, page.goto returns, the "await using" block ends, and the page closes,
-				// preventing the resource from ever finishing.
 				await resourceFinishedPromise;
 				// Give the browser some extra time to handle rendering and LCP calculation after resource load
 				await new Promise((resolve) =>
@@ -208,40 +209,50 @@ export class LcpImpactEvaluationService extends AllJsService {
 					),
 				);
 			}
+
+			// Wait up to 30s for LCP value to be set
+			try {
+				await page.waitForFunction(() => {
+					return window.__prefetcherLcp !== null || window.__prefetcherLcpError;
+				}, {
+					timeout: 30000,
+				});
+			} catch (e) {
+				this.log.debug(`[LCP] Timeout/Error waiting for LCP value to be set for ${url}`);
+			}
+
+			const lcpResult = await page.evaluate(function () {
+				if (window.__prefetcherLcp !== null) return window.__prefetcherLcp;
+				if (window.__prefetcherLcpError) throw window.__prefetcherLcpError;
+
+				// Fallback: check performance buffer directly
+				try {
+					const lcpEntries = performance.getEntriesByType("largest-contentful-paint");
+					if (lcpEntries.length > 0) {
+						const last = lcpEntries[lcpEntries.length - 1] as any;
+						return last.renderTime || last.startTime;
+					}
+				} catch (e) {
+					console.warn('[LCP] Fallback getEntries failed', e);
+				}
+				return null;
+			});
+
+			this.log.debug(`[LCP] Result for ${url} (delay: ${delayResourceUrl || "none"}): ${lcpResult}ms`);
+			return typeof lcpResult === "number" ? lcpResult : null;
+
 		} catch (error) {
 			this.log.error(error, `[LCP] Failed to navigate to page: ${url}`);
 			return null;
-		}
-
-		// Execute script in browser context to retrieve LCP value
-		// Wait for LCP value to be set, as PerformanceObserver callback might be slightly delayed after load
-		try {
-			await page.waitForFunction(() => window.__prefetcherLcp !== null || window.__prefetcherLcpError, {
-				timeout: 5000,
-			});
-		} catch (e) {
-			this.log.debug(`[LCP] Timeout waiting for LCP value to be set for ${url}`);
-		}
-
-		const lcp = await page.evaluate(function () {
-			if (window.__prefetcherLcp !== null) return window.__prefetcherLcp;
-			if (window.__prefetcherLcpError) throw window.__prefetcherLcpError;
-
-			// Fallback: check performance buffer directly
-			// Note: getEntriesByType('largest-contentful-paint') might trigger a deprecation warning in some browsers
-			try {
-				const entries = performance.getEntriesByType("largest-contentful-paint");
-				if (entries.length > 0) {
-					const last = entries[entries.length - 1] as any;
-					return last.renderTime || last.startTime;
-				}
-			} catch (e) {
-				console.warn('[LCP] Fallback getEntriesByType failed', e);
+		} finally {
+			// Ensure tracing is stopped even if we keep the page open
+			if (isDebugMode()) {
+				await pageObj.stopTracing().catch(() => {});
+				this.log.debug(`[LCP] Debug mode: keeping page open for ${url}`);
+			} else {
+				await pageObj[Symbol.asyncDispose]();
 			}
-			return null;
-		});
-
-		return typeof lcp === "number" ? lcp : null;
+		}
 	}
 
 	/**
