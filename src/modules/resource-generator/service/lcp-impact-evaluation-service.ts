@@ -129,11 +129,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 		url: string,
 		delayResourceUrl?: string,
 	): Promise<number | null> {
-		const traceName = delayResourceUrl
-			? `lcp-delay-${path.basename(delayResourceUrl)}`
-			: "lcp-baseline";
-
-		await using pageObj = await this.getPage({ traceName });
+		const pageObj = await this.getPage();
 		const page = pageObj.page as Page;
 
 		// Used to ensure the delayed resource has actually finished loading
@@ -245,9 +241,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 			this.log.error(error, `[LCP] Failed to navigate to page: ${url}`);
 			return null;
 		} finally {
-			// Ensure tracing is stopped even if we keep the page open
 			if (isDebugMode()) {
-				await pageObj.stopTracing().catch(() => {});
 				this.log.debug(`[LCP] Debug mode: keeping page open for ${url}`);
 			} else {
 				await pageObj[Symbol.asyncDispose]();

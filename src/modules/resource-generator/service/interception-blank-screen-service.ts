@@ -25,8 +25,7 @@ class InterceptionBlankScreenService extends AllJsService {
 				this.log.info(
 					`[InterceptionBlankScreenService] Validating resource: ${resource.url}`,
 				);
-					const traceName = `blank-screen-${path.basename(resource.url)}`;
-				await using pageObj = await this.getPage({ traceName });
+				await using pageObj = await this.getPage();
 					const page = pageObj.page;
 					this.log.info(
 						`[InterceptionBlankScreenService] Page object received in filter: ${page}`,

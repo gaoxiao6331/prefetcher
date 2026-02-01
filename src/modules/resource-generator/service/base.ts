@@ -1,5 +1,3 @@
-import path from "node:path";
-import fs from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import puppeteer, {
 	type Browser,
@@ -10,7 +8,7 @@ import { PUPPETEER_EXECUTABLE_PATH } from "@/env";
 import { isDebugMode } from "@/utils/is";
 
 import { Semaphore } from "@/utils/semaphore";
-import { bindAsyncContext, getLogger, getTraceId } from "@/utils/trace-context";
+import { bindAsyncContext, getLogger } from "@/utils/trace-context";
 import type {
 	CapturedResource,
 	GenerateContext,
@@ -38,16 +36,13 @@ abstract class BaseService implements ResourceGeneratorService {
 	/** HTTP Status Multiple Choices (Start of 3xx) */
 	protected static readonly HTTP_STATUS_MULTIPLE_CHOICES = 300;
 
-	/** Global flag to prevent concurrent tracing sessions in the same browser */
-	private static isGlobalTracingActive = false;
-
 	protected readonly BROWSER_TRACE_DIR_COUNT_THRESHOLD = 5;
 
 	protected browser: Browser | null = null;
 	// Limit concurrent pages to avoid crashing the server
 	protected readonly semaphore = new Semaphore(BaseService.MAX_CONCURRENT_PAGES);
 
-	constructor(protected readonly fastify: FastifyInstance) {}
+	protected constructor(protected readonly fastify: FastifyInstance) {}
 
 	/**
 	 * Get logger, prioritize logger with traceId
@@ -122,7 +117,7 @@ abstract class BaseService implements ResourceGeneratorService {
 		}
 	}
 
-	protected async getPage(options?: { traceName?: string }) {
+	protected async getPage() {
 		if (!this.browser || !this.browser.connected) {
 			this.log.warn("Browser not connected, re-initializing...");
 			await this.initBrowser();
@@ -149,94 +144,10 @@ abstract class BaseService implements ResourceGeneratorService {
 
 		await page.setRequestInterception(true);
 
-		// Record performance in debug mode
-		let isTracingStartedByThisPage = false;
-		const stopTracing = async () => {
-			if (isTracingStartedByThisPage) {
-				try {
-					await page.tracing.stop();
-					this.log.debug("[Browser] Performance tracing stopped and saved");
-				} catch (err) {
-					this.log.warn(`[Browser] Failed to stop tracing: ${err}`);
-				} finally {
-					isTracingStartedByThisPage = false;
-					BaseService.isGlobalTracingActive = false;
-				}
-			}
-		};
-
-		if (!BaseService.isGlobalTracingActive) {
-			BaseService.isGlobalTracingActive = true;
-			isTracingStartedByThisPage = true;
-
-			const traceId = getTraceId() || "unknown-trace";
-
-			const baseDir = "browser-traces";
-
-			// up to BROWSER_TRACE_DIR_COUNT_THRESHOLD dirs
-			const traceDirs = await fs.readdir(baseDir);
-			await Promise.all(
-				traceDirs.slice(this.BROWSER_TRACE_DIR_COUNT_THRESHOLD).map((dir) => fs.rm(path.resolve(baseDir, dir), { recursive: true })),
-			);
-
-			const tracesDir = path.resolve(baseDir, traceId);
-			try {
-				await fs.access(tracesDir);
-			} catch {
-				await fs.mkdir(tracesDir, { recursive: true });
-			}
-
-			// Sanitize trace name if provided
-			const tracePrefix = options?.traceName
-				? options.traceName.replace(/[^a-z0-9]/gi, "-").toLowerCase()
-				: "trace";
-
-			const tracePath = path.join(
-				tracesDir,
-				`${tracePrefix}.json`,
-			);
-
-			try {
-				await page.tracing.start({
-					path: tracePath,
-					screenshots: true,
-					categories: [
-						"-*", // Start with nothing
-						"toplevel",
-						"v8.execute",
-						"blink.console",
-						"blink.user_timing",
-						"benchmark",
-						"loading",
-						"devtools.timeline",
-						"disabled-by-default-devtools.timeline",
-						"disabled-by-default-devtools.timeline.frame",
-						"disabled-by-default-devtools.timeline.stack",
-						"disabled-by-default-devtools.screenshot",
-						"disabled-by-default-v8.cpu_profiler",
-						"disabled-by-default-v8.cpu_profiler.hires",
-						"latencyInfo",
-						"cc",
-						"gpu",
-						"devtools.timeline.layers",
-						"devtools.timeline.picture",
-						"disabled-by-default-devtools.timeline.layers",
-					],
-				});
-				this.log.debug(`[Browser] Performance tracing started: ${tracePath}`);
-			} catch (err) {
-				BaseService.isGlobalTracingActive = false;
-				isTracingStartedByThisPage = false;
-				this.log.warn(`[Browser] Failed to start tracing: ${err}`);
-			}
-		}
-
 		return {
 			page,
-			stopTracing,
 			[Symbol.asyncDispose]: async () => {
 				try {
-					await stopTracing();
 					if (!page.isClosed()) {
 						await page.close();
 					}
@@ -262,9 +173,7 @@ abstract class BaseService implements ResourceGeneratorService {
 			const requestStartTimeMap = new Map();
 			const capturedResources: CapturedResource[] = [];
 
-			await using pageObj = await this.getPage({
-				traceName: `capture-${url}`,
-			});
+			await using pageObj = await this.getPage();
 			const page = pageObj.page;
 
 			// Request interception already enabled in getPage()
