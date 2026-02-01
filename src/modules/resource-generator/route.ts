@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
+import { bindAsyncContext } from "@/utils/trace-context";
 import { createResourceSchema } from "./schema";
 
 const sniffRoutes: FastifyPluginAsync = async (fastify, _opts) => {

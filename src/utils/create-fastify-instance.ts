@@ -45,9 +45,12 @@ declare module "fastify" {
 }
 
 export default async function createFastifyInstance() {
+	const logLevel = isDebugMode() ? "debug" : "info";
+
 	const logTargets: pino.TransportTargetOptions[] = [
 		{
 			target: "pino-pretty",
+			level: logLevel,
 			options: {
 				translateTime: "HH:MM:ss Z",
 				ignore: "pid,hostname",
@@ -58,6 +61,7 @@ export default async function createFastifyInstance() {
 
 	logTargets.push({
 		target: "pino-roll",
+		level: logLevel,
 		options: {
 			// Path to save log files
 			file: path.join("logs", "app.log"),
@@ -76,7 +80,7 @@ export default async function createFastifyInstance() {
 	// 3. Initialize Fastify
 	const fastify = Fastify({
 		logger: {
-			level: isDebugMode() ? "debug" : "info",
+			level: logLevel,
 			transport: {
 				targets: logTargets,
 			},

@@ -1,5 +1,6 @@
 import type { HTTPRequest, HTTPResponse, Page } from "puppeteer";
 import { Semaphore } from "@/utils/semaphore";
+import { bindAsyncContext } from "@/utils/trace-context";
 import type { CapturedResource, GenerateContext } from "../type";
 import AllJsService from "./all-js-service";
 
@@ -60,46 +61,47 @@ export class LcpImpactEvaluationService extends AllJsService {
 			validationSemaphore.run(async () => {
 				try {
 					// Skip impact evaluation for the main document itself
-					if (resource.url === ctx.url) {
-						this.log.debug(
-							`[LCP] Skipping impact evaluation for main document: ${resource.url}`,
+						if (resource.url === ctx.url) {
+							this.log.debug(
+								`[LCP] Skipping impact evaluation for main document: ${resource.url}`,
+							);
+							return false;
+						}
+
+						// Simulate delayed loading of the current resource and measure new LCP
+						const impactedLcp = await this.measureLcpInternal(
+							ctx.url,
+							resource.url,
 						);
-						return false;
-					}
 
-					// Simulate delayed loading of the current resource and measure new LCP
-					const impactedLcp = await this.measureLcpInternal(
-						ctx.url,
-						resource.url,
-					);
+						if (impactedLcp == null) {
+							this.log.warn(
+								`[LCP] Failed to measure LCP with delayed resource: ${resource.url}, treating as critical by default`,
+							);
+							return true; // Treat as critical on measurement failure
+						}
 
-					if (impactedLcp == null) {
-						this.log.warn(
-							`[LCP] Failed to measure LCP with delayed resource: ${resource.url}, treating as critical by default`,
+						// If LCP is close to or exceeds the threshold after delaying the resource, it is considered critical.
+						// We use 0.9 as the "proximity" ratio (90% of the threshold).
+						const isCritical =
+							impactedLcp >=
+							LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS *
+								LcpImpactEvaluationService.CRITICAL_PROXIMITY_RATIO;
+
+						this.log.info(
+							`[LCP] Resource: ${resource.url}, Impacted LCP: ${impactedLcp}ms, Critical: ${isCritical}`,
 						);
-						return true; // Treat as critical on measurement failure
+
+						return isCritical;
+					} catch (err) {
+						this.log.error(
+							err,
+							`[LCP] Error during impact evaluation for resource: ${resource.url}`,
+						);
+						return true; // Treat as critical on error
 					}
-
-					// If LCP is close to or exceeds the threshold after delaying the resource, it is considered critical.
-					// We use 0.9 as the "proximity" ratio (90% of the threshold).
-					const isCritical =
-						impactedLcp >=
-						LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS *
-							LcpImpactEvaluationService.CRITICAL_PROXIMITY_RATIO;
-
-					this.log.info(
-						`[LCP] Resource: ${resource.url}, Impacted LCP: ${impactedLcp}ms, Critical: ${isCritical}`,
-					);
-
-					return isCritical;
-				} catch (err) {
-					this.log.error(
-						err,
-						`[LCP] Error during impact evaluation for resource: ${resource.url}`,
-					);
-					return true; // Treat as critical on error
 				}
-			}),
+			),
 		);
 
 		const validationResults = await Promise.all(tasks);
@@ -124,7 +126,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 		delayResourceUrl?: string,
 	): Promise<number | null> {
 		// Use "await using" for automatic page resource disposal
-		await using pageObj = await this.getPage();
+		const  pageObj = await this.getPage();
 		const page = pageObj.page as Page;
 
 		// Used to ensure the delayed resource has actually finished loading
@@ -153,12 +155,12 @@ export class LcpImpactEvaluationService extends AllJsService {
 					page.off("requestfailed", onRequestFailed);
 					resolve(true);
 				};
-				const onResponse = (res: HTTPResponse) => {
+				const onResponse = bindAsyncContext((res: HTTPResponse) => {
 					if (res.url() === delayResourceUrl) finish();
-				};
-				const onRequestFailed = (req: HTTPRequest) => {
+				});
+				const onRequestFailed = bindAsyncContext((req: HTTPRequest) => {
 					if (req.url() === delayResourceUrl) finish();
-				};
+				});
 				page.on("response", onResponse);
 				page.on("requestfailed", onRequestFailed);
 
@@ -219,30 +221,36 @@ export class LcpImpactEvaluationService extends AllJsService {
 	 */
 	private setupDelayInterception(page: Page, resourceUrl: string) {
 		try {
-			page.on("request", (req) => {
-				try {
-					if (req.isInterceptResolutionHandled()) return;
+			page.on(
+				"request",
+				bindAsyncContext((req) => {
+					try {
+						if (req.isInterceptResolutionHandled()) return;
 
-					if (req.url() === resourceUrl) {
-						// Delay and then release if it's the target resource
-						setTimeout(() => {
-							if (req.isInterceptResolutionHandled()) {
-								return;
-							}
+						if (req.url() === resourceUrl) {
+							// Delay and then release if it's the target resource
+							setTimeout(
+								() => {
+									if (req.isInterceptResolutionHandled()) {
+										return;
+									}
+									req.continue().catch((err: Error) => {
+										this.log.warn(`[LCP] Request handling failed: ${err.message}`);
+									});
+								},
+								LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS,
+							);
+						} else {
+							// Continue other resources normally
 							req.continue().catch((err: Error) => {
 								this.log.warn(`[LCP] Request handling failed: ${err.message}`);
 							});
-						}, LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS);
-					} else {
-						// Continue other resources normally
-						req.continue().catch((err: Error) => {
-							this.log.warn(`[LCP] Request handling failed: ${err.message}`);
-						});
+						}
+					} catch (err) {
+						this.log.warn(`[LCP] Request handling failed: ${err}`);
 					}
-				} catch (err) {
-					this.log.warn(`[LCP] Request handling failed: ${err}`);
-				}
-			});
+				}),
+			);
 		} catch (error) {
 			this.log.warn(error, "[LCP] Failed to set up delay interception");
 		}

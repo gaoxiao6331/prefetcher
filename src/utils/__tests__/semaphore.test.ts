@@ -1,4 +1,5 @@
 import { Semaphore } from "../semaphore";
+import { traceStorage, bindAsyncContext } from "../trace-context";
 
 describe("Semaphore", () => {
 	test("should allow tasks up to max count", async () => {
@@ -93,5 +94,50 @@ describe("Semaphore", () => {
 		// After release, count should still be the same as if it was consumed
 		// because we inside 'if (tasks.length > 0)' branch.
 		expect(sm.count).toBe(1);
+	});
+
+	test("should preserve async context in run()", async () => {
+		const semaphore = new Semaphore(1);
+		const context = { traceId: "test-id", logger: {} as any };
+
+		await traceStorage.run(context, async () => {
+			const result = await semaphore.run(async () => {
+				return traceStorage.getStore()?.traceId;
+			});
+			expect(result).toBe("test-id");
+		});
+
+		// Test with queuing
+		await traceStorage.run(context, async () => {
+			// Occupy the semaphore
+			await semaphore.acquire();
+
+			const t2 = semaphore.run(async () => {
+				return traceStorage.getStore()?.traceId;
+			});
+
+			// Release after some time
+			setTimeout(() => semaphore.release(), 10);
+
+			const result = await t2;
+			expect(result).toBe("test-id");
+		});
+	});
+
+	test("should be safe to pass an already bound function to run()", async () => {
+		const semaphore = new Semaphore(1);
+		const context = { traceId: "double-bind-id", logger: {} as any };
+
+		await traceStorage.run(context, async () => {
+			// Manually bind first
+			const manualBoundFn = bindAsyncContext(async () => {
+				return traceStorage.getStore()?.traceId;
+			});
+
+			// Pass the already bound function to semaphore.run (which will bind it again)
+			const result = await semaphore.run(manualBoundFn);
+
+			expect(result).toBe("double-bind-id");
+		});
 	});
 });

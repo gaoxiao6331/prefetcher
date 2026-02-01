@@ -1,3 +1,5 @@
+import { bindAsyncContext } from "./trace-context";
+
 /**
  * Semaphore is used to control the number of concurrent tasks.
  * Commonly used to limit access to scarce resources (e.g., database connections, headless browser instances) and prevent service overload.
@@ -49,13 +51,15 @@ export class Semaphore {
 
 	/**
 	 * Executes an asynchronous function, automatically managing the acquisition and release of permits.
+	 * Automatically binds the current async context to ensure context (like traceId) is preserved even if the task is queued.
 	 * @param fn The asynchronous function to execute
 	 * @returns The result returned by the function
 	 */
 	async run<T>(fn: () => Promise<T>): Promise<T> {
+		const boundFn = bindAsyncContext(fn);
 		await this.acquire();
 		try {
-			return await fn();
+			return await boundFn();
 		} finally {
 			this.release();
 		}
