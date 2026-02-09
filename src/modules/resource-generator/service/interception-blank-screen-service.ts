@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { Page } from "puppeteer";
 import { Semaphore } from "@/utils/semaphore";
 import { bindAsyncContext } from "@/utils/trace-context";
@@ -6,6 +5,12 @@ import type { CapturedResource, GenerateContext } from "../type";
 import AllJsService from "./all-js-service";
 
 class InterceptionBlankScreenService extends AllJsService {
+	/** Maximum concurrent validation tasks
+	 * 	⚠️ Opening multiple tabs will cause background tabs to be throttled, 
+	 * 	potentially leading to false positives in blank screen detection.
+	 */
+	private static readonly MAX_CONCURRENT_VALIDATIONS = 1;
+
 	protected override async filter(
 		ctx: GenerateContext,
 	): Promise<GenerateContext & { validationResults: boolean[] }> {
@@ -17,8 +22,9 @@ class InterceptionBlankScreenService extends AllJsService {
 		const resources = baseCtx.capturedResources;
 
 		// Use a separate semaphore for validation to avoid deadlocking with the main capture semaphore
-		// We use a small number to avoid resource exhaustion
-		const validationSemaphore = new Semaphore(3);
+		const validationSemaphore = new Semaphore(
+			InterceptionBlankScreenService.MAX_CONCURRENT_VALIDATIONS,
+		);
 
 		const tasks = resources.map((resource: CapturedResource) =>
 			validationSemaphore.run(async () => {
@@ -26,12 +32,12 @@ class InterceptionBlankScreenService extends AllJsService {
 					`[InterceptionBlankScreenService] Validating resource: ${resource.url}`,
 				);
 				await using pageObj = await this.getPage();
-					const page = pageObj.page;
-					this.log.info(
-						`[InterceptionBlankScreenService] Page object received in filter: ${page}`,
-					);
+				const page = pageObj.page;
 
-					// Intercept and block THIS specific resource
+				// Ensure page is active to ensure reliable rendering and screenshotting
+				await page.bringToFront();
+
+				// Intercept and block THIS specific resource
 					page.on(
 						"request",
 						bindAsyncContext((req) => {
