@@ -1,9 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import puppeteer from "puppeteer";
 import type { CapturedResource, GenerateContext } from "../../type";
-import LcpImpactEvaluationService, {
-	_evaluateLcpInBrowserContext,
-} from "../lcp-impact-evaluation-service";
+import LcpImpactEvaluationService from "../lcp-impact-evaluation-service";
 
 jest.mock("puppeteer");
 jest.mock("@/utils/trace-context", () => ({
@@ -15,6 +13,12 @@ jest.mock("@/utils/semaphore", () => ({
 		run: jest.fn().mockImplementation((fn: () => unknown) => fn()),
 	})),
 }));
+
+jest.mock("@/utils/is", () => ({
+	isDebugMode: jest.fn().mockReturnValue(false),
+}));
+
+import { isDebugMode } from "@/utils/is";
 
 // Test constants
 const TEST_URL = "http://example.com";
@@ -40,6 +44,9 @@ function createMockPage() {
 		evaluate: jest.fn(),
 		evaluateOnNewDocument: jest.fn(),
 		setRequestInterception: jest.fn(),
+		setCacheEnabled: jest.fn(),
+		bringToFront: jest.fn(),
+		waitForFunction: jest.fn(),
 		isClosed: jest.fn().mockReturnValue(false),
 		close: jest.fn(),
 	};
@@ -99,18 +106,21 @@ type ServiceWithInternals = {
 interface MockRequest {
 	isInterceptResolutionHandled: () => boolean;
 	url: () => string;
+	resourceType: () => string;
 	continue: jest.Mock;
 	abort?: jest.Mock;
 }
 
 // Helper function to create mock Fastify instance
 function createMockFastify(): FastifyInstance {
+	const log = {
+		info: jest.fn(),
+		warn: jest.fn(),
+		error: jest.fn(),
+		debug: jest.fn(),
+	};
 	return {
-		log: {
-			info: jest.fn(),
-			warn: jest.fn(),
-			error: jest.fn(),
-		},
+		log,
 	} as unknown as FastifyInstance;
 }
 
@@ -148,77 +158,59 @@ describe("LcpImpactEvaluationService", () => {
 		)?.[1];
 	});
 
+	describe("setupLcpObserver (coverage)", () => {
+		test("should do nothing if largest-contentful-paint is not supported", async () => {
+			let scriptFn: () => void = () => {};
+			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
+				scriptFn = fn;
+			});
+
+			await (service as any).setupLcpObserver(mockPage);
+
+			const mockWindow: any = {
+				PerformanceObserver: {
+					supportedEntryTypes: ["other-entry-type"],
+				},
+			};
+			const originalWindow = global.window;
+			(global as any).window = mockWindow;
+
+			try {
+				scriptFn();
+				expect(mockWindow.__prefetcherLcp).toBeNull();
+			} finally {
+				(global as any).window = originalWindow;
+			}
+		});
+
+		test("should handle missing PerformanceObserver.supportedEntryTypes", async () => {
+			let scriptFn: () => void = () => {};
+			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
+				scriptFn = fn;
+			});
+
+			await (service as any).setupLcpObserver(mockPage);
+
+			const mockWindow: any = {
+				PerformanceObserver: {
+					supportedEntryTypes: null,
+				},
+			};
+			const originalWindow = global.window;
+			(global as any).window = mockWindow;
+
+			try {
+				scriptFn();
+				expect(mockWindow.__prefetcherLcp).toBeNull();
+			} finally {
+				(global as any).window = originalWindow;
+			}
+		});
+	});
+
 	afterEach(async () => {
 		(service as unknown as ServiceWithInternals).browser = null;
 		await service.close();
-	});
-
-	describe("_evaluateLcpInBrowserContext", () => {
-		let mockWindow: {
-			performance: { getEntriesByType: jest.Mock };
-			__prefetcherLcp?: unknown;
-		};
-		let mockPerformance: { getEntriesByType: jest.Mock };
-
-		beforeEach(() => {
-			mockPerformance = {
-				getEntriesByType: jest.fn().mockReturnValue([]),
-			};
-			mockWindow = {
-				performance: mockPerformance,
-			};
-
-			// Setup global window for tests that use the exported function directly
-			(global as unknown as { window: unknown }).window = mockWindow;
-			(global as unknown as { performance: unknown }).performance =
-				mockPerformance;
-		});
-
-		afterEach(() => {
-			delete (global as unknown as Record<string, unknown>).window;
-			delete (global as unknown as Record<string, unknown>).performance;
-		});
-
-		test("should return __prefetcherLcp value when available", () => {
-			mockWindow.__prefetcherLcp = 1234.5;
-			expect(_evaluateLcpInBrowserContext()).toBe(1234.5);
-		});
-
-		test("should return last LCP entry startTime when __prefetcherLcp not available", () => {
-			mockWindow.__prefetcherLcp = undefined;
-			mockPerformance.getEntriesByType.mockReturnValueOnce([
-				{ startTime: 100 },
-				{ startTime: 200 },
-			]);
-			expect(_evaluateLcpInBrowserContext()).toBe(200);
-		});
-
-		test("should return null when no LCP data available", () => {
-			mockWindow.__prefetcherLcp = undefined;
-			mockPerformance.getEntriesByType.mockReturnValueOnce([]);
-			expect(_evaluateLcpInBrowserContext()).toBeNull();
-		});
-
-		test("should return null when __prefetcherLcp is not a number", () => {
-			mockWindow.__prefetcherLcp = "not a number";
-			expect(_evaluateLcpInBrowserContext()).toBeNull();
-		});
-
-		test("should return null when LCP entry startTime is not a number", () => {
-			mockWindow.__prefetcherLcp = undefined;
-			mockPerformance.getEntriesByType.mockReturnValueOnce([
-				{ startTime: "not a number" },
-			]);
-			expect(_evaluateLcpInBrowserContext()).toBeNull();
-		});
-
-		test("should return null when performance.getEntriesByType throws", () => {
-			mockWindow.__prefetcherLcp = undefined;
-			mockPerformance.getEntriesByType.mockImplementation(() => {
-				throw new Error("Performance error");
-			});
-			expect(_evaluateLcpInBrowserContext()).toBeNull();
-		});
 	});
 
 	describe("LcpImpactEvaluationService - setupDelayInterception", () => {
@@ -245,6 +237,7 @@ describe("LcpImpactEvaluationService", () => {
 			const mockRequest: MockRequest = {
 				isInterceptResolutionHandled: () => true,
 				url: () => TEST_RESOURCE_URL,
+				resourceType: () => "script",
 				continue: jest.fn(),
 			};
 			await requestHandler(mockRequest);
@@ -255,6 +248,7 @@ describe("LcpImpactEvaluationService", () => {
 			const mockRequest: MockRequest = {
 				isInterceptResolutionHandled: () => false,
 				url: () => TEST_RESOURCE_URL,
+				resourceType: () => "script",
 				continue: jest.fn().mockResolvedValue(undefined),
 			};
 
@@ -270,6 +264,7 @@ describe("LcpImpactEvaluationService", () => {
 			const mockRequest: MockRequest = {
 				isInterceptResolutionHandled: () => false,
 				url: () => "http://example.com/other.js",
+				resourceType: () => "script",
 				continue: jest.fn().mockResolvedValue(undefined),
 			};
 			await requestHandler(mockRequest);
@@ -280,6 +275,7 @@ describe("LcpImpactEvaluationService", () => {
 			const mockRequest: MockRequest = {
 				isInterceptResolutionHandled: () => false,
 				url: () => TEST_RESOURCE_URL,
+				resourceType: () => "script",
 				continue: jest.fn().mockRejectedValue(new Error("Continue failed")),
 			};
 
@@ -288,20 +284,19 @@ describe("LcpImpactEvaluationService", () => {
 			await Promise.resolve(); // Flush microtask queue
 
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				`[LCP] Request handling failed: Continue failed`,
+				expect.stringMatching(/\[LCP\] Request handling failed for delayed resource: Continue failed/),
 			);
 		});
 
-		test("should log warning if continue fails for non-delayed resource", async () => {
+		test("should silently handle continue failure for non-delayed resource", async () => {
 			const mockRequest: MockRequest = {
 				isInterceptResolutionHandled: () => false,
 				url: () => "http://example.com/other.js",
+				resourceType: () => "script",
 				continue: jest.fn().mockRejectedValue(new Error("Continue failed")),
 			};
 			await requestHandler(mockRequest);
-			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				`[LCP] Request handling failed: Continue failed`,
-			);
+			expect(fastifyMock.log.warn).not.toHaveBeenCalled();
 		});
 
 		test("should log warning if an error occurs during request handling", async () => {
@@ -310,12 +305,13 @@ describe("LcpImpactEvaluationService", () => {
 					throw new Error("Handling error");
 				},
 				url: () => TEST_RESOURCE_URL,
+				resourceType: () => "script",
 				continue: jest.fn(),
 			};
 			await requestHandler(mockRequest);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.stringContaining(
-					"[LCP] Request handling failed: Error: Handling error",
+					"[LCP] Request listener error: Error: Handling error",
 				),
 			);
 		});
@@ -326,13 +322,12 @@ describe("LcpImpactEvaluationService", () => {
 				url: () => {
 					throw new Error("URL error");
 				},
+				resourceType: () => "script",
 				continue: jest.fn(),
 			};
 			await requestHandler(mockRequest);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				expect.stringContaining(
-					"[LCP] Request handling failed: Error: URL error",
-				),
+				expect.stringMatching(/\[LCP\] Request listener error: Error: URL error/),
 			);
 		});
 
@@ -342,15 +337,16 @@ describe("LcpImpactEvaluationService", () => {
 					if (event === "request") {
 						throw new Error("Event error");
 					}
+					return mockPage;
 				},
 			);
-			(service as unknown as ServiceWithInternals).setupDelayInterception(
+			await (service as unknown as ServiceWithInternals).setupDelayInterception(
 				mockPage,
 				TEST_RESOURCE_URL,
 			);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.any(Error),
-				expect.stringContaining("[LCP] Failed to set up delay interception"),
+				"[LCP] Failed to set up delay interception",
 			);
 		});
 
@@ -358,6 +354,7 @@ describe("LcpImpactEvaluationService", () => {
 			const mockRequest: MockRequest = {
 				isInterceptResolutionHandled: jest.fn().mockReturnValue(false),
 				url: () => TEST_RESOURCE_URL,
+				resourceType: () => "script",
 				continue: jest.fn().mockResolvedValue(undefined),
 			};
 
@@ -377,6 +374,7 @@ describe("LcpImpactEvaluationService", () => {
 			const mockRequest: MockRequest = {
 				isInterceptResolutionHandled: jest.fn().mockReturnValue(false),
 				url: () => TEST_RESOURCE_URL,
+				resourceType: () => "script",
 				continue: jest.fn().mockResolvedValue(undefined),
 			};
 
@@ -393,6 +391,18 @@ describe("LcpImpactEvaluationService", () => {
 			// Advance remaining time
 			jest.advanceTimersByTime(19000);
 			await Promise.resolve();
+			expect(mockRequest.continue).not.toHaveBeenCalled();
+		});
+
+		test("should not call continue if request is already handled before entering the listener", async () => {
+			const mockRequest: MockRequest = {
+				isInterceptResolutionHandled: () => true,
+				url: () => TEST_RESOURCE_URL,
+				resourceType: () => "script",
+				continue: jest.fn().mockResolvedValue(undefined),
+			};
+
+			await requestHandler(mockRequest);
 			expect(mockRequest.continue).not.toHaveBeenCalled();
 		});
 	});
@@ -447,17 +457,6 @@ describe("LcpImpactEvaluationService", () => {
 			expect(measureLcpInternalSpy).toHaveBeenCalledTimes(1);
 		});
 
-		test("should handle page close failure", async () => {
-			mockPage.close.mockRejectedValueOnce(new Error("Close failed"));
-			await (service as unknown as ServiceWithInternals).measureLcpInternal(
-				TEST_URL,
-			);
-			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				expect.any(Error),
-				"Failed to close page",
-			);
-		});
-
 		test("should handle browser close failure", async () => {
 			mockBrowser.close.mockRejectedValueOnce(new Error("Close failed"));
 			await service.close();
@@ -470,13 +469,13 @@ describe("LcpImpactEvaluationService", () => {
 
 	describe("filter", () => {
 		test("should evaluate resource impact and filter non-critical ones", async () => {
-			const measureLcpWithDelaySpy = jest
+			const measureLcpInternalSpy = jest
 				.spyOn(
 					service as unknown as ServiceWithInternals,
-					"measureLcpWithDelay",
+					"measureLcpInternal",
 				)
 				.mockImplementation(async (_url, resourceUrl) => {
-					if (resourceUrl === TEST_RESOURCE_URL) return 25000; // Critical (> 20000 * 0.9)
+					if (resourceUrl === TEST_RESOURCE_URL) return 25000; // Critical (> 10000 * 0.9)
 					return 5000; // Not critical
 				});
 
@@ -491,14 +490,14 @@ describe("LcpImpactEvaluationService", () => {
 
 			expect(result.capturedResources).toHaveLength(1);
 			expect(result.capturedResources[0].url).toBe(TEST_RESOURCE_URL);
-			expect(measureLcpWithDelaySpy).toHaveBeenCalledTimes(2);
+			expect(measureLcpInternalSpy).toHaveBeenCalledTimes(2);
 		});
 
 		test("should treat resource as critical if its evaluation fails", async () => {
 			jest
 				.spyOn(
 					service as unknown as ServiceWithInternals,
-					"measureLcpWithDelay",
+					"measureLcpInternal",
 				)
 				.mockResolvedValue(null);
 
@@ -517,7 +516,7 @@ describe("LcpImpactEvaluationService", () => {
 			jest
 				.spyOn(
 					service as unknown as ServiceWithInternals,
-					"measureLcpWithDelay",
+					"measureLcpInternal",
 				)
 				.mockRejectedValue(new Error("Evaluation failed"));
 
@@ -530,6 +529,7 @@ describe("LcpImpactEvaluationService", () => {
 			);
 
 			expect(result.capturedResources).toHaveLength(1);
+			expect(fastifyMock.log.error).toHaveBeenCalled();
 		});
 
 		test("should return original context if no resources are captured", async () => {
@@ -537,14 +537,31 @@ describe("LcpImpactEvaluationService", () => {
 			const result = await (service as unknown as ServiceWithInternals).filter(
 				ctx,
 			);
+			expect(result).toBe(ctx);
+		});
+
+		test("should skip impact evaluation for main document", async () => {
+			const resources = [{ url: TEST_URL, type: "document" }] as CapturedResource[];
+			const ctx = createMockContext(resources);
+
+			const measureSpy = jest.spyOn(service as any, "measureLcpInternal");
+
+			const result = await (service as any).filter(ctx);
 			expect(result.capturedResources).toHaveLength(0);
-			expect(result.url).toBe(ctx.url);
+			expect(measureSpy).not.toHaveBeenCalled();
 		});
 	});
 
 	describe("measureLcpInternal", () => {
 		beforeEach(() => {
 			jest.useRealTimers();
+			// Mock default successful behavior for all async calls
+			mockPage.goto.mockResolvedValue(undefined);
+			mockPage.waitForFunction.mockResolvedValue(undefined);
+			mockPage.evaluate.mockResolvedValue({ lcp: 2500, error: null });
+			mockPage.close.mockResolvedValue(undefined);
+			mockPage.bringToFront.mockResolvedValue(undefined);
+			mockPage.setCacheEnabled.mockResolvedValue(undefined);
 		});
 
 		afterEach(() => {
@@ -552,7 +569,6 @@ describe("LcpImpactEvaluationService", () => {
 		});
 
 		test("should return LCP value on successful navigation", async () => {
-			mockPage.evaluate.mockResolvedValueOnce(2500);
 			const result = await (
 				service as unknown as ServiceWithInternals
 			).measureLcpInternal(TEST_URL);
@@ -565,21 +581,17 @@ describe("LcpImpactEvaluationService", () => {
 				service as unknown as ServiceWithInternals
 			).measureLcpInternal(TEST_URL);
 			expect(result).toBeNull();
+			expect(fastifyMock.log.error).toHaveBeenCalledWith(
+				expect.any(Error),
+				expect.stringContaining("Failed to navigate to page"),
+			);
 		});
 
 		test("should setup delay interception if delayResourceUrl is provided", async () => {
-			mockPage.evaluate.mockResolvedValueOnce(2500);
 			const setupSpy = jest.spyOn(
 				service as unknown as ServiceWithInternals,
 				"setupDelayInterception",
 			);
-
-			// Mock goto to emit the response event which resolves resourceFinishedPromise
-			mockPage.goto.mockImplementationOnce(async () => {
-				setTimeout(() => {
-					mockPage.emit("response", { url: () => TEST_RESOURCE_URL });
-				}, 10);
-			});
 
 			const result = await (
 				service as unknown as ServiceWithInternals
@@ -589,280 +601,599 @@ describe("LcpImpactEvaluationService", () => {
 			expect(setupSpy).toHaveBeenCalledWith(mockPage, TEST_RESOURCE_URL);
 		});
 
-		test("should resolve resourceFinishedPromise if request fails", async () => {
-			mockPage.evaluate.mockResolvedValueOnce(2500);
+		test("should handle LCP measurement failure and return diagnostics", async () => {
+			mockPage.evaluate.mockResolvedValueOnce({
+				lcp: null,
+				error: "LCP not found",
+			});
 
-			// Trigger the event after a short delay
-			setTimeout(() => {
-				mockPage.emit("requestfailed", { url: () => TEST_RESOURCE_URL });
-			}, 10);
-
-			const result = await (
-				service as unknown as ServiceWithInternals
-			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
-
-			expect(result).toBe(2500);
-		});
-
-		test("should not resolve resourceFinishedPromise if different resource fails or responds", async () => {
-			mockPage.evaluate.mockResolvedValueOnce(2500);
-
-			// Trigger events after short delays
-			setTimeout(() => {
-				mockPage.emit("requestfailed", { url: () => "http://other.com" });
-				mockPage.emit("response", { url: () => "http://other.com" });
-
-				setTimeout(() => {
-					mockPage.emit("response", { url: () => TEST_RESOURCE_URL });
-				}, 10);
-			}, 10);
-
-			const result = await (
-				service as unknown as ServiceWithInternals
-			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
-
-			expect(result).toBe(2500);
-		}, 10000);
-
-		test("should resolve resourceFinishedPromise via 30s timeout", async () => {
-			// This test is hard with real timers because it takes 30s.
-			// Let's use fake timers just for this one.
-			jest.useFakeTimers();
-
-			mockPage.evaluate.mockResolvedValueOnce(2500);
-			const promise = (
-				service as unknown as ServiceWithInternals
-			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
-
-			for (let i = 0; i < 50; i++) await Promise.resolve();
-
-			// Advance 30s for the resource timeout
-			jest.advanceTimersByTime(30000);
-			for (let i = 0; i < 50; i++) await Promise.resolve();
-
-			// Advance 500ms for the post-load wait
-			jest.advanceTimersByTime(1000);
-			for (let i = 0; i < 50; i++) await Promise.resolve();
-
-			const result = await promise;
-			expect(result).toBe(2500);
-		}, 10000);
-
-		test("should cover the case where finish is called before timeoutId is set", async () => {
-			// Use real timers for consistency
-			jest.useRealTimers();
-
-			mockPage.evaluate.mockResolvedValueOnce(2500);
-
-			// Modify mockPage.on to trigger event immediately for this test
-			const originalOn = mockPage.on.getMockImplementation();
-			mockPage.on.mockImplementation(
-				(event: string, handler: (...args: unknown[]) => unknown) => {
-					if (event === "response") {
-						// Trigger synchronously during the on() call
-						handler({ url: () => TEST_RESOURCE_URL });
-					}
-					if (originalOn) {
-						return originalOn(event, handler);
-					}
-					return mockPage;
-				},
-			);
-
-			const result = await (
-				service as unknown as ServiceWithInternals
-			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
-
-			expect(result).toBe(2500);
-
-			// Restore mock
-			if (originalOn) {
-				mockPage.on.mockImplementation(originalOn);
-			}
-		}, 10000);
-
-		test("should cover finish called twice", async () => {
-			mockPage.evaluate.mockResolvedValueOnce(2500);
-
-			// Modify mockPage.on to trigger event twice
-			const originalOn = mockPage.on.getMockImplementation();
-			mockPage.on.mockImplementation(
-				(event: string, handler: (...args: unknown[]) => unknown) => {
-					if (event === "response") {
-						// Trigger twice
-						handler({ url: () => TEST_RESOURCE_URL });
-						handler({ url: () => TEST_RESOURCE_URL });
-					}
-					if (originalOn) {
-						return originalOn(event, handler);
-					}
-					return mockPage;
-				},
-			);
-
-			const result = await (
-				service as unknown as ServiceWithInternals
-			).measureLcpInternal(TEST_URL, TEST_RESOURCE_URL);
-
-			expect(result).toBe(2500);
-
-			if (originalOn) {
-				mockPage.on.mockImplementation(originalOn);
-			}
-		});
-
-		test("should return null if evaluate returns non-number", async () => {
-			mockPage.evaluate.mockResolvedValueOnce(null);
 			const result = await (
 				service as unknown as ServiceWithInternals
 			).measureLcpInternal(TEST_URL);
+
+			expect(result).toBeNull();
+			expect(fastifyMock.log.error).toHaveBeenCalledWith(
+				expect.stringContaining("Browser-side error during LCP observation: LCP not found"),
+			);
+		});
+
+		test("should handle page close failure", async () => {
+			mockPage.close.mockRejectedValueOnce(new Error("Close failed"));
+
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL);
+			expect(result).toBe(2500);
+			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
+				expect.any(Error),
+				"Failed to close page",
+			);
+		});
+
+		test("should not close page in debug mode", async () => {
+			(isDebugMode as jest.Mock).mockReturnValue(true);
+			try {
+				await (service as any).measureLcpInternal(TEST_URL);
+				expect(mockPage.close).not.toHaveBeenCalled();
+			} finally {
+				(isDebugMode as jest.Mock).mockReturnValue(false);
+			}
+		});
+
+		test("should return diagnostics if LCP measurement times out", async () => {
+			mockPage.waitForFunction.mockRejectedValue(new Error("Timeout"));
+			mockPage.evaluate.mockResolvedValueOnce({
+				lcp: null,
+				error: "LCP Timeout",
+			});
+
+			const result = await (service as any).measureLcpInternal(TEST_URL);
+			expect(result).toBeNull();
+			expect(fastifyMock.log.debug).toHaveBeenCalledWith(
+				expect.stringContaining("Timeout waiting for LCP value"),
+			);
+		});
+
+		test("should return LCP if found even after timeout", async () => {
+			mockPage.waitForFunction.mockRejectedValue(new Error("Timeout"));
+			mockPage.evaluate.mockResolvedValueOnce({
+				lcp: 5000,
+				error: null,
+			});
+
+			const result = await (service as any).measureLcpInternal(TEST_URL);
+			expect(result).toBe(5000);
+		});
+
+		test("should handle LCP error in result", async () => {
+			mockPage.evaluate.mockResolvedValueOnce({
+				lcp: null,
+				error: "Script Error",
+			});
+
+			const result = await (service as any).measureLcpInternal(TEST_URL);
+			expect(result).toBeNull();
+			expect(fastifyMock.log.error).toHaveBeenCalledWith(
+				expect.stringContaining("Browser-side error during LCP observation: Script Error"),
+			);
+		});
+
+		test("should return null if finalLcp is not a number", async () => {
+			mockPage.evaluate.mockResolvedValueOnce({
+				lcp: "not a number",
+				error: null,
+			});
+
+			const result = await (service as any).measureLcpInternal(TEST_URL);
 			expect(result).toBeNull();
 		});
 	});
 
-	describe("setupLcpObserver", () => {
-		let observerCallback: (entries: { getEntries: () => unknown[] }) => void;
-		let mockObserver: { observe: jest.Mock; disconnect: jest.Mock };
-
-		beforeEach(() => {
-			mockObserver = {
-				observe: jest.fn(),
-				disconnect: jest.fn(),
-			};
-			(
-				global as unknown as { PerformanceObserver: unknown }
-			).PerformanceObserver = jest.fn().mockImplementation((callback) => {
-				observerCallback = callback;
-				return mockObserver;
+	describe("setupDelayInterception - response monitoring", () => {
+		test("should log warning for error response", async () => {
+			let responseHandler: (res: any) => void = () => {};
+			mockPage.on.mockImplementation((event: string, handler: any) => {
+				if (event === "response") responseHandler = handler;
+				return mockPage;
 			});
 
-			(global as unknown as { window: unknown }).window = {
-				addEventListener: jest.fn(),
+			await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
+
+			const mockResponse = {
+				status: () => 404,
+				url: () => "http://example.com/missing.js",
+				request: () => ({
+					resourceType: () => "script",
+				}),
 			};
-			(global as unknown as { document: unknown }).document = {
-				visibilityState: "visible",
-			};
-		});
 
-		afterEach(() => {
-			delete (global as unknown as Record<string, unknown>).PerformanceObserver;
-			delete (global as unknown as Record<string, unknown>).window;
-			delete (global as unknown as Record<string, unknown>).document;
-		});
+			responseHandler(mockResponse);
 
-		test("should set __prefetcherLcp when LCP entry is observed", () => {
-			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
-			// Trigger observer callback
-			mockPage.evaluateOnNewDocument.mock.calls[0][0]();
-
-			// Mock the window environment inside the evaluateOnNewDocument callback
-			const entries = {
-				getEntries: () => [{ startTime: 3000 }],
-			};
-			observerCallback(entries);
-
-			// In a real browser, this would set window.__prefetcherLcp
-			// Here we are just testing the observer setup logic
-			expect(mockObserver.observe).toHaveBeenCalledWith({
-				type: "largest-contentful-paint",
-				buffered: true,
-			});
-		});
-
-		test("should handle errors during observer setup", async () => {
-			mockPage.evaluateOnNewDocument.mockImplementationOnce(() => {
-				throw new Error("Setup error");
-			});
-			await (service as unknown as ServiceWithInternals).setupLcpObserver(
-				mockPage,
-			);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				expect.any(Error),
-				expect.stringContaining("Failed to set up LCP observer"),
+				expect.stringContaining("[LCP] Browser resource error: 404"),
 			);
 		});
 
-		test("should not set __prefetcherLcp if no LCP entry", () => {
-			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
-			mockPage.evaluateOnNewDocument.mock.calls[0][0]();
-
-			const entries = {
-				getEntries: () => [],
-			};
-			observerCallback(entries);
-			// No error should occur
-		});
-
-		test("should disconnect observer when visibility changes to hidden", () => {
-			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
-			const evaluateFn = mockPage.evaluateOnNewDocument.mock.calls[0][0];
-
-			// Mock window.addEventListener to capture the callback
-			const eventListeners: { [key: string]: (...args: unknown[]) => unknown } =
-				{};
-			(
-				global as unknown as { window: { addEventListener: jest.Mock } }
-			).window.addEventListener = jest
-				.fn()
-				.mockImplementation((event, callback) => {
-					eventListeners[event] = callback;
-				});
-
-			evaluateFn();
-
-			expect(eventListeners.visibilitychange).toBeDefined();
-
-			// Simulate visibility change to hidden
-			(
-				global as unknown as { document: { visibilityState: string } }
-			).document.visibilityState = "hidden";
-			eventListeners.visibilitychange();
-
-			expect(mockObserver.disconnect).toHaveBeenCalled();
-		});
-
-		test("should not disconnect observer when visibility changes to visible", () => {
-			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
-			const evaluateFn = mockPage.evaluateOnNewDocument.mock.calls[0][0];
-
-			const eventListeners: { [key: string]: (...args: unknown[]) => unknown } =
-				{};
-			(
-				global as unknown as { window: { addEventListener: jest.Mock } }
-			).window.addEventListener = jest
-				.fn()
-				.mockImplementation((event, callback) => {
-					eventListeners[event] = callback;
-				});
-
-			evaluateFn();
-
-			// Simulate visibility change to visible
-			(
-				global as unknown as { document: { visibilityState: string } }
-			).document.visibilityState = "visible";
-			eventListeners.visibilitychange();
-
-			expect(mockObserver.disconnect).not.toHaveBeenCalled();
-		});
-
-		test("should handle error in browser context", () => {
-			(service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
-			const evaluateFn = mockPage.evaluateOnNewDocument.mock.calls[0][0];
-
-			// Make PerformanceObserver throw to trigger catch block
-			(
-				global as unknown as { PerformanceObserver: jest.Mock }
-			).PerformanceObserver = jest.fn().mockImplementation(() => {
-				throw new Error("Browser error");
+		test("should not log warning for successful response", async () => {
+			let responseHandler: (res: any) => void = () => {};
+			mockPage.on.mockImplementation((event: string, handler: any) => {
+				if (event === "response") responseHandler = handler;
+				return mockPage;
 			});
 
-			evaluateFn();
+			await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
 
-			expect(
-				(global as unknown as { window: { __prefetcherLcpError: unknown } })
-					.window.__prefetcherLcpError,
-			).toBeDefined();
+			const mockResponse = {
+				status: () => 200,
+				url: () => "http://example.com/found.js",
+				request: () => ({
+					resourceType: () => "script",
+				}),
+			};
+
+			responseHandler(mockResponse);
+
+			expect(fastifyMock.log.warn).not.toHaveBeenCalled();
 		});
 	});
+
+	describe("normalizeUrl", () => {
+		test("should return original URL if parsing fails", () => {
+			const result = (service as any).normalizeUrl("invalid-url");
+			expect(result).toBe("invalid-url");
+		});
+
+		test("should remove hash from URL", () => {
+			const result = (service as any).normalizeUrl("http://example.com/#hash");
+			expect(result).toBe("http://example.com/");
+		});
+	});
+
+	describe("setupLcpObserver (internal logic)", () => {
+		test("should handle script execution error in evaluateOnNewDocument", async () => {
+			let scriptFn: () => void = () => {};
+			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
+				scriptFn = fn;
+			});
+
+			await (service as any).setupLcpObserver(mockPage);
+
+			// Mock window to throw error when PerformanceObserver is accessed
+			const mockWindow: any = {};
+			Object.defineProperty(mockWindow, "PerformanceObserver", {
+				get: () => {
+					throw new Error("Observer Error");
+				},
+			});
+
+			const originalWindow = global.window;
+			(global as any).window = mockWindow;
+
+			try {
+				scriptFn();
+				expect(mockWindow.__prefetcherLcpError).toBeDefined();
+				expect(mockWindow.__prefetcherLcpError.message).toBe("Observer Error");
+			} finally {
+				(global as any).window = originalWindow;
+			}
+		});
+
+		test("should record LCP from PerformanceObserver", async () => {
+			let scriptFn: () => void = () => {};
+			let observerCallback: (list: any) => void = () => {};
+
+			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
+				scriptFn = fn;
+			});
+
+			await (service as any).setupLcpObserver(mockPage);
+
+			class MockPerformanceObserver {
+				constructor(cb: (list: any) => void) {
+					observerCallback = cb;
+				}
+				observe() {}
+			}
+			(MockPerformanceObserver as any).supportedEntryTypes = ["largest-contentful-paint"];
+
+			const mockWindow: any = {
+				PerformanceObserver: MockPerformanceObserver,
+			};
+
+			const originalWindow = global.window;
+			const originalPerformanceObserver = global.PerformanceObserver;
+			(global as any).window = mockWindow;
+			(global as any).PerformanceObserver = MockPerformanceObserver;
+
+			try {
+				scriptFn();
+
+				// Simulate observer callback
+				const mockEntry = {
+					renderTime: 1234.56,
+				};
+				observerCallback({
+					getEntries: () => [mockEntry],
+				});
+
+				expect(mockWindow.__prefetcherLcp).toBe(1234.56);
+
+				// Simulate another entry with startTime (fallback)
+				const mockEntry2 = {
+					startTime: 2345.67,
+				};
+				observerCallback({
+					getEntries: () => [mockEntry, mockEntry2],
+				});
+				expect(mockWindow.__prefetcherLcp).toBe(2345.67);
+
+				// Simulate entry with no value
+				const mockEntry3 = {};
+				observerCallback({
+					getEntries: () => [mockEntry3],
+				});
+				expect(mockWindow.__prefetcherLcp).toBe(2345.67); // Should keep last valid value or not crash
+
+			} finally {
+				(global as any).window = originalWindow;
+				(global as any).PerformanceObserver = originalPerformanceObserver;
+			}
+		});
+	});
+
+	describe("setupLcpObserver", () => {
+		test("should call evaluateOnNewDocument", async () => {
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
+			expect(mockPage.evaluateOnNewDocument).toHaveBeenCalled();
+		});
+
+		test("should handle setup error", async () => {
+			mockPage.evaluateOnNewDocument.mockRejectedValue(new Error("Setup failed"));
+			await (service as any).setupLcpObserver(mockPage);
+			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
+				expect.any(Error),
+				"[LCP] Failed to set up LCP observer",
+			);
+		});
+
+		test("should handle unsupported PerformanceObserver", async () => {
+			let scriptFn: () => void = () => {};
+			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
+				scriptFn = fn;
+			});
+
+			await (service as any).setupLcpObserver(mockPage);
+
+			// Test case 1: PerformanceObserver is missing
+			const mockWindow1: any = {
+				PerformanceObserver: undefined,
+			};
+			const originalWindow = global.window;
+			(global as any).window = mockWindow1;
+			try {
+				scriptFn();
+				expect(mockWindow1.__prefetcherLcp).toBeNull();
+			} finally {
+				(global as any).window = originalWindow;
+			}
+
+			// Test case 2: supportedEntryTypes is missing
+			const mockWindow2: any = {
+				PerformanceObserver: {},
+			};
+			(global as any).window = mockWindow2;
+			try {
+				scriptFn();
+				expect(mockWindow2.__prefetcherLcp).toBeNull();
+			} finally {
+				(global as any).window = originalWindow;
+			}
+
+			// Test case 3: largest-contentful-paint not in supportedEntryTypes
+			const mockWindow3: any = {
+				PerformanceObserver: {
+					supportedEntryTypes: ["other-entry-type"],
+				},
+			};
+			(global as any).window = mockWindow3;
+			try {
+				scriptFn();
+				expect(mockWindow3.__prefetcherLcp).toBeNull();
+			} finally {
+				(global as any).window = originalWindow;
+			}
+		});
+
+		test("should handle PerformanceObserver error in script", async () => {
+			let scriptFn: () => void = () => {};
+			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
+				scriptFn = fn;
+			});
+
+			await (service as any).setupLcpObserver(mockPage);
+
+			// Mock global window to throw error
+			const mockWindow: any = {
+				get PerformanceObserver() {
+					throw new Error("Observer error");
+				},
+			};
+			const originalWindow = global.window;
+			(global as any).window = mockWindow;
+
+			try {
+				scriptFn();
+				expect(mockWindow.__prefetcherLcpError).toBeDefined();
+			} finally {
+				(global as any).window = originalWindow;
+			}
+		});
+
+		test("should handle PerformanceObserver entry correctly", async () => {
+			let observerCallback: (entryList: any) => void = () => {};
+			const mockObserver = {
+				observe: jest.fn(),
+			};
+
+			let scriptFn: () => void = () => {};
+			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
+				scriptFn = fn;
+			});
+
+			await (service as any).setupLcpObserver(mockPage);
+
+			// Mock global window and PerformanceObserver
+			const mockWindow: any = {
+				PerformanceObserver: jest.fn().mockImplementation((cb) => {
+					observerCallback = cb;
+					return mockObserver;
+				}),
+			};
+			mockWindow.PerformanceObserver.supportedEntryTypes = ["largest-contentful-paint"];
+			
+			const originalWindow = global.window;
+			const originalPO = global.PerformanceObserver;
+			(global as any).window = mockWindow;
+			(global as any).PerformanceObserver = mockWindow.PerformanceObserver;
+
+			try {
+				scriptFn();
+				
+				// Simulate entry
+				observerCallback({
+					getEntries: () => [{ renderTime: 1234 }],
+				});
+				expect(mockWindow.__prefetcherLcp).toBe(1234);
+
+				// Simulate entry with startTime only
+				observerCallback({
+					getEntries: () => [{ renderTime: 0, startTime: 5678 }],
+				});
+				expect(mockWindow.__prefetcherLcp).toBe(5678);
+			} finally {
+				(global as any).window = originalWindow;
+				(global as any).PerformanceObserver = originalPO;
+			}
+		});
+
+		test("should handle missing entry in PerformanceObserver callback", async () => {
+			let scriptFn: () => void = () => {};
+			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
+				scriptFn = fn;
+			});
+
+			await (service as any).setupLcpObserver(mockPage);
+
+			let observerCallback: (list: any) => void = () => {};
+			const mockWindow: any = {
+				PerformanceObserver: jest.fn().mockImplementation((cb) => {
+					observerCallback = cb;
+					return { observe: jest.fn() };
+				}),
+			};
+			mockWindow.PerformanceObserver.supportedEntryTypes = ["largest-contentful-paint"];
+
+			const originalWindow = global.window;
+			const originalPO = global.PerformanceObserver;
+			(global as any).window = mockWindow;
+			(global as any).PerformanceObserver = mockWindow.PerformanceObserver;
+
+			try {
+				scriptFn();
+				// Call with empty list
+				observerCallback({ getEntries: () => [] });
+				expect(mockWindow.__prefetcherLcp).toBeNull();
+			} finally {
+				(global as any).window = originalWindow;
+				(global as any).PerformanceObserver = originalPO;
+			}
+		});
+
+		test("should handle non-number value in PerformanceObserver callback", async () => {
+			let scriptFn: () => void = () => {};
+			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
+				scriptFn = fn;
+			});
+
+			await (service as any).setupLcpObserver(mockPage);
+
+			let observerCallback: (list: any) => void = () => {};
+			const mockWindow: any = {
+				PerformanceObserver: jest.fn().mockImplementation((cb) => {
+					observerCallback = cb;
+					return { observe: jest.fn() };
+				}),
+			};
+			mockWindow.PerformanceObserver.supportedEntryTypes = ["largest-contentful-paint"];
+
+			const originalWindow = global.window;
+			const originalPO = global.PerformanceObserver;
+			(global as any).window = mockWindow;
+			(global as any).PerformanceObserver = mockWindow.PerformanceObserver;
+
+			try {
+				scriptFn();
+				// Call with invalid value
+				observerCallback({
+					getEntries: () => [{ renderTime: "invalid" }],
+				});
+				expect(mockWindow.__prefetcherLcp).toBeNull();
+			} finally {
+				(global as any).window = originalWindow;
+				(global as any).PerformanceObserver = originalPO;
+			}
+		});
+	});
+
+	describe("normalizeUrl", () => {
+		test("should remove hash from URL", () => {
+			const url = "http://example.com/page#hash";
+			const result = (service as any).normalizeUrl(url);
+			expect(result).toBe("http://example.com/page");
+		});
+
+		test("should return original string if URL is invalid", () => {
+			const url = "invalid-url";
+			const result = (service as any).normalizeUrl(url);
+			expect(result).toBe("invalid-url");
+		});
+	});
+
+	describe("setupDelayInterception - extended", () => {
+		test("should log warning on 404 response", async () => {
+			let responseHandler: (res: any) => void = () => {};
+			mockPage.on.mockImplementation((event: string, handler: any) => {
+				if (event === "response") {
+					responseHandler = handler;
+				}
+				return mockPage;
+			});
+
+			await (service as any).setupDelayInterception(
+				mockPage,
+				"http://example.com/delay",
+			);
+
+			const mockRes = {
+				status: () => 404,
+				url: () => "http://example.com/delay",
+				request: () => ({
+					resourceType: () => "script",
+				}),
+			};
+
+			responseHandler(mockRes);
+
+			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
+				expect.stringContaining("[LCP] Browser resource error: 404"),
+			);
+		});
+
+		test("should handle setup failure", async () => {
+			mockPage.setRequestInterception.mockRejectedValue(new Error("Interception error"));
+			await (service as any).setupDelayInterception(mockPage, "http://example.com");
+			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
+				expect.any(Error),
+				"[LCP] Failed to set up delay interception",
+			);
+		});
+    describe("Static Browser Helpers", () => {
+      test("_checkLcpStatus should return true if __prefetcherLcp is not null", () => {
+        const mockWindow = { __prefetcherLcp: 1000, __prefetcherLcpError: null };
+        (global as any).window = mockWindow;
+        expect((LcpImpactEvaluationService as any)._checkLcpStatus()).toBe(true);
+        delete (global as any).window;
+      });
+
+      test("_checkLcpStatus should return true if __prefetcherLcpError is set", () => {
+        const mockWindow = { __prefetcherLcp: null, __prefetcherLcpError: "Error" };
+        (global as any).window = mockWindow;
+        expect((LcpImpactEvaluationService as any)._checkLcpStatus()).toBe(true);
+        delete (global as any).window;
+      });
+
+      test("_checkLcpStatus should return false if both are null/empty", () => {
+        const mockWindow = { __prefetcherLcp: null, __prefetcherLcpError: null };
+        (global as any).window = mockWindow;
+        expect((LcpImpactEvaluationService as any)._checkLcpStatus()).toBe(false);
+        delete (global as any).window;
+      });
+
+      test("_getLcpResult should return LCP and null error", () => {
+        const mockWindow = { __prefetcherLcp: 1200, __prefetcherLcpError: null };
+        (global as any).window = mockWindow;
+        expect((LcpImpactEvaluationService as any)._getLcpResult()).toEqual({
+          lcp: 1200,
+          error: null,
+        });
+        delete (global as any).window;
+      });
+
+      test("_getLcpResult should return error string if error exists", () => {
+        const mockWindow = { __prefetcherLcp: null, __prefetcherLcpError: new Error("Failed") };
+        (global as any).window = mockWindow;
+        expect((LcpImpactEvaluationService as any)._getLcpResult()).toEqual({
+          lcp: null,
+          error: "Error: Failed",
+        });
+        delete (global as any).window;
+      });
+    });
+
+    describe("setupDelayInterception additional coverage", () => {
+      test("should handle already handled request in request listener", async () => {
+        const mockReq = {
+          url: () => TEST_RESOURCE_URL,
+          isInterceptResolutionHandled: jest.fn().mockReturnValue(true),
+          resourceType: () => "script",
+          continue: jest.fn(),
+        } as unknown as MockRequest;
+
+        await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
+        
+        const requestHandler = mockPage.on.mock.calls.find(call => call[0] === "request")[1];
+        await requestHandler(mockReq);
+
+        expect(mockReq.continue).not.toHaveBeenCalled();
+      });
+
+      test("should handle already handled request after timeout", async () => {
+        jest.useFakeTimers();
+        const mockReq = {
+          url: () => TEST_RESOURCE_URL,
+          isInterceptResolutionHandled: jest.fn()
+            .mockReturnValueOnce(false) // First call in listener
+            .mockReturnValueOnce(true),  // Second call in timeout
+          resourceType: () => "script",
+          continue: jest.fn(),
+        } as unknown as MockRequest;
+
+        await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
+        
+        const requestHandler = mockPage.on.mock.calls.find(call => call[0] === "request")[1];
+        await requestHandler(mockReq);
+
+        jest.advanceTimersByTime((LcpImpactEvaluationService as any).LCP_IMPACT_THRESHOLD_MS);
+        
+        expect(mockReq.continue).not.toHaveBeenCalled();
+        expect(fastifyMock.log.debug).toHaveBeenCalledWith(expect.stringContaining("Request already handled, skipping continue"));
+        jest.useRealTimers();
+      });
+
+      test("should handle response with status < 400 silently", async () => {
+        const mockRes = {
+          status: () => 200,
+          url: () => TEST_RESOURCE_URL,
+          request: () => ({ resourceType: () => "script" }),
+        } as any;
+
+        await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
+        
+        const responseHandler = mockPage.on.mock.calls.find(call => call[0] === "response")[1];
+        responseHandler(mockRes);
+
+        expect(fastifyMock.log.warn).not.toHaveBeenCalledWith(expect.stringContaining("Browser resource error"));
+      });
+    });
+  });
 });

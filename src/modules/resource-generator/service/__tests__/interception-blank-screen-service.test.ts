@@ -47,6 +47,7 @@ interface MockPage {
 	close: jest.Mock;
 	screenshot: jest.Mock;
 	evaluateOnNewDocument: jest.Mock;
+	bringToFront: jest.Mock;
 }
 
 interface MockBrowser {
@@ -130,6 +131,7 @@ function createMockPageInstance(
 		close: jest.fn(),
 		screenshot: jest.fn().mockResolvedValue("mock-base64"),
 		evaluateOnNewDocument: jest.fn(),
+		bringToFront: jest.fn().mockResolvedValue(undefined),
 	};
 	return mockPageInstance;
 }
@@ -152,6 +154,7 @@ describe("InterceptionBlankScreenService", () => {
 			screenshot: jest.fn().mockResolvedValue("mock-base64"),
 			evaluate: jest.fn().mockResolvedValue({ decided: false, blankRate: 50 }),
 			evaluateOnNewDocument: jest.fn(),
+			bringToFront: jest.fn().mockResolvedValue(undefined),
 		};
 
 		mockBrowser = {

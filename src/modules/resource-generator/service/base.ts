@@ -168,116 +168,125 @@ abstract class BaseService implements ResourceGeneratorService {
 	async captureResources(url: string) {
 		// Use semaphore to limit concurrent browser page instances
 		return this.semaphore.run(async () => {
-			let id = 0;
+			try {
+				let id = 0;
 
-			const requestStartTimeMap = new Map();
-			const capturedResources: CapturedResource[] = [];
+				const requestStartTimeMap = new Map();
+				const capturedResources: CapturedResource[] = [];
 
-			await using pageObj = await this.getPage();
-			const page = pageObj.page;
+				await using pageObj = await this.getPage();
+				const page = pageObj.page;
 
-			// Request interception already enabled in getPage()
+				// Request interception already enabled in getPage()
 
-			// Use bindAsyncContext to bind context, ensuring getLogger() works properly in event callbacks
-			page.on(
-				"request",
-				bindAsyncContext((request: HTTPRequest) => {
-					try {
-						if (request.isInterceptResolutionHandled()) return;
-
-						// Only track GET requests, but ensure others are allowed to continue
-						if (request.method() !== "GET") {
-							request.continue();
-							return;
-						}
-
-						id++;
-						const requestId = id.toString();
-						// Inject a custom header to correlate request and response later
-						const headers = {
-							...request.headers(),
-							[this.requestHeader]: requestId,
-						};
-
-						// Record start time
-						requestStartTimeMap.set(requestId, {
-							url: request.url(),
-							timestamp: Date.now(),
-						});
-
-						request.continue({ headers });
-					} catch (err) {
-						this.log.warn(`Request interception failed: ${err}`);
-						if (!request.isInterceptResolutionHandled()) {
-							request.continue().catch(() => {});
-						}
-					}
-				}),
-			);
-
-			page.on(
-				"response",
-				bindAsyncContext(async (response: HTTPResponse) => {
-					try {
-						const request = response.request();
-						if (request.method() !== "GET") return;
-
-						// Try to get requestId
-						// Note: Not all requests accept headers (e.g. redirects). Skip if ID is missing.
-						const headers = request.headers();
-						const requestId = headers[this.requestHeader];
-
-						// If ID is missing in headers, skip.
-						if (!requestId) return;
-
-						const requestInfo = requestStartTimeMap.get(requestId);
-						if (!requestInfo) return;
-
-						const status = response.status();
-						// Only record successful requests (2xx)
-						if (status < BaseService.HTTP_STATUS_OK || status >= BaseService.HTTP_STATUS_MULTIPLE_CHOICES) return;
-
-						let resourceSizeKB = 0;
+				// Use bindAsyncContext to bind context, ensuring getLogger() works properly in event callbacks
+				page.on(
+					"request",
+					bindAsyncContext(async (request: HTTPRequest) => {
 						try {
-							const buffer = await response.buffer();
-							resourceSizeKB = buffer.length / BaseService.BYTES_PER_KB;
-						} catch (_e) {
-							// Ignored: Buffer access might fail for various reasons (CORS, etc.)
+							if (request.isInterceptResolutionHandled()) return;
+
+							// Only track GET requests, but ensure others are allowed to continue
+							if (request.method() !== "GET") {
+								await request.continue();
+								return;
+							}
+
+							id++;
+							const requestId = id.toString();
+							// Inject a custom header to correlate request and response later
+							const headers = {
+								...request.headers(),
+								[this.requestHeader]: requestId,
+							};
+
+							// Record start time
+							requestStartTimeMap.set(requestId, {
+								url: request.url(),
+								timestamp: Date.now(),
+							});
+
+							await request.continue({ headers });
+						} catch (err) {
+							this.log.warn(`Request interception failed: ${err}`);
+							if (!request.isInterceptResolutionHandled()) {
+								try {
+									await request.continue();
+								} catch (_e) {
+									// ignore
+								}
+							}
 						}
+					}),
+				);
 
-						const now = Date.now();
-						capturedResources.push({
-							url: response.url(),
-							status: status,
-							type: request.resourceType(),
-							sizeKB: resourceSizeKB,
-							requestTime: requestInfo.timestamp,
-							responseTime: now,
-							durationMs: now - requestInfo.timestamp,
-						});
+				page.on(
+					"response",
+					bindAsyncContext(async (response: HTTPResponse) => {
+						try {
+							const request = response.request();
+							if (request.method() !== "GET") return;
 
-						// Cleanup map to prevent memory leaks
-						requestStartTimeMap.delete(requestId);
-					} catch (err) {
-						this.log.warn(`Response processing failed: ${err}`);
-					}
-				}),
-			);
+							// Try to get requestId
+							// Note: Not all requests accept headers (e.g. redirects). Skip if ID is missing.
+							const headers = request.headers();
+							const requestId = headers[this.requestHeader];
 
-			await page.goto(url, { waitUntil: "networkidle0", timeout: BaseService.DEFAULT_PAGE_GOTO_TIMEOUT_MS });
+							// If ID is missing in headers, skip.
+							if (!requestId) return;
 
-			// wait for all resource loaded
-			await new Promise((resolve) => setTimeout(resolve, BaseService.RESOURCE_READY_WAIT_MS));
+							const requestInfo = requestStartTimeMap.get(requestId);
+							if (!requestInfo) return;
 
-			const ctx: GenerateContext = {
-				url,
-				capturedResources,
-			};
+							const status = response.status();
+							// Only record successful requests (2xx)
+							if (status < BaseService.HTTP_STATUS_OK || status >= BaseService.HTTP_STATUS_MULTIPLE_CHOICES) return;
 
-			// Filter and rank resources before returning
-			const filteredCtx = await this.filter(ctx);
-			const rankedCtx = await this.rank(filteredCtx);
-			return rankedCtx.capturedResources.map((r) => r.url);
+							let resourceSizeKB = 0;
+							try {
+								const buffer = await response.buffer();
+								resourceSizeKB = buffer.length / BaseService.BYTES_PER_KB;
+							} catch (_e) {
+								// Ignored: Buffer access might fail for various reasons (CORS, etc.)
+							}
+
+							const now = Date.now();
+							capturedResources.push({
+								url: response.url(),
+								status: status,
+								type: request.resourceType(),
+								sizeKB: resourceSizeKB,
+								requestTime: requestInfo.timestamp,
+								responseTime: now,
+								durationMs: now - requestInfo.timestamp,
+							});
+
+							// Cleanup map to prevent memory leaks
+							requestStartTimeMap.delete(requestId);
+						} catch (err) {
+							this.log.warn(`Response processing failed: ${err}`);
+						}
+					}),
+				);
+
+				await page.goto(url, { waitUntil: "networkidle0", timeout: BaseService.DEFAULT_PAGE_GOTO_TIMEOUT_MS });
+
+				// wait for all resource loaded
+				await new Promise((resolve) => setTimeout(resolve, BaseService.RESOURCE_READY_WAIT_MS));
+
+				const ctx: GenerateContext = {
+					url,
+					capturedResources,
+				};
+
+				// Filter and rank resources before returning
+				const filteredCtx = await this.filter(ctx);
+				const rankedCtx = await this.rank(filteredCtx);
+				return rankedCtx.capturedResources.map((r) => r.url);
+			} catch (error) {
+				this.log.error(error, `Failed to capture resources for ${url}`);
+				return [];
+			}
 		});
 	}
 }

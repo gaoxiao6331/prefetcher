@@ -15,7 +15,12 @@ export const start = async (params: StartParams) => {
 	if(isDebugMode()) {
 		// kill process on port 3000
 		try {
-			await exec("kill -9 $(lsof -t -i:3000)");
+			await new Promise((resolve, reject) => {
+				exec("kill -9 $(lsof -t -i:3000)", (err) => {
+					if (err) reject(err);
+					else resolve(undefined);
+				});
+			});
 		} catch (err) {
 			console.error("Failed to kill process on port 3000:", err);
 		}

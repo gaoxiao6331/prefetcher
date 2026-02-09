@@ -161,11 +161,12 @@ export class LcpImpactEvaluationService extends AllJsService {
 
 			// Wait for LCP value to be set by the observer
 			try {
-				await page.waitForFunction(() => {
-					return (window as any).__prefetcherLcp !== null || (window as any).__prefetcherLcpError;
-				}, {
-					timeout: LcpImpactEvaluationService.LCP_CHECK_TIMEOUT_MS,
-				});
+				await page.waitForFunction(
+					LcpImpactEvaluationService._checkLcpStatus,
+					{
+						timeout: LcpImpactEvaluationService.LCP_CHECK_TIMEOUT_MS,
+					},
+				);
 				this.log.debug(`[LCP] LCP value detected in window.__prefetcherLcp`);
 			} catch {
 				this.log.debug(`[LCP] Timeout waiting for LCP value in window.__prefetcherLcp`);
@@ -174,12 +175,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 			// Give the browser a tiny bit more time to ensure all entries are in the buffer
 			await new Promise((resolve) => setTimeout(resolve, LcpImpactEvaluationService.FINAL_BUFFER_WAIT_MS));
 
-			const lcpResult = await page.evaluate(() => {
-				return {
-					lcp: window.__prefetcherLcp,
-					error: window.__prefetcherLcpError ? String(window.__prefetcherLcpError) : null,
-				};
-			});
+			const lcpResult = await page.evaluate(LcpImpactEvaluationService._getLcpResult);
 
 			this.log.debug(`[LCP] Measurement details for ${url}: ${JSON.stringify(lcpResult)}`);
 
@@ -211,12 +207,11 @@ export class LcpImpactEvaluationService extends AllJsService {
 	 * @param resourceUrl URL of the resource to delay
 	 */
 	private async setupDelayInterception(page: Page, resourceUrl: string) {
-
-		await page.setRequestInterception(true);
-
-		const normalizedTargetUrl = this.normalizeUrl(resourceUrl);
-
 		try {
+			await page.setRequestInterception(true);
+
+			const normalizedTargetUrl = this.normalizeUrl(resourceUrl);
+
 			page.on(
 				"request",
 				bindAsyncContext((req) => {
@@ -269,46 +264,71 @@ export class LcpImpactEvaluationService extends AllJsService {
 	 */
 	private async setupLcpObserver(page: Page) {
 		try {
-			await page.evaluateOnNewDocument(() => {
-				try {
-					window.__prefetcherLcp = null;
-
-					if (
-						!window.PerformanceObserver ||
-						!PerformanceObserver.supportedEntryTypes ||
-						!PerformanceObserver.supportedEntryTypes.includes(
-							"largest-contentful-paint",
-						)
-					) {
-						return;
-					}
-
-					// Create PerformanceObserver to listen for largest-contentful-paint events
-					const observer = new PerformanceObserver((entryList) => {
-						const entries = entryList.getEntries();
-						const last = entries[entries.length - 1] as any;
-						if (last) {
-							const value = last.renderTime || last.startTime;
-							if (typeof value === "number") {
-								// Record the latest LCP time
-								window.__prefetcherLcp = value;
-							}
-						}
-					});
-
-					// Use modern 'type' API with 'buffered' flag for accurate measurement
-					// This avoids the 'Deprecated API for given entry type' warning caused by 'entryTypes'
-					observer.observe({
-						type: "largest-contentful-paint",
-						buffered: true,
-					});
-				} catch (error) {
-					// Record script execution error
-					window.__prefetcherLcpError = error;
-				}
-			});
+			await page.evaluateOnNewDocument(
+				LcpImpactEvaluationService._setupLcpObserverInBrowser,
+			);
 		} catch (err) {
 			this.log.warn(err, "[LCP] Failed to set up LCP observer");
+		}
+	}
+
+	/**
+	 * Browser-side function to check if LCP value is available
+	 */
+	protected static _checkLcpStatus() {
+		const win = window as any;
+		return win.__prefetcherLcp !== null || !!win.__prefetcherLcpError;
+	}
+
+	/**
+	 * Browser-side function to retrieve LCP result
+	 */
+	protected static _getLcpResult() {
+		const win = window as any;
+		return {
+			lcp: win.__prefetcherLcp,
+			error: win.__prefetcherLcpError ? String(win.__prefetcherLcpError) : null,
+		};
+	}
+
+	/**
+	 * Browser-side function to set up PerformanceObserver for LCP
+	 */
+	protected static _setupLcpObserverInBrowser() {
+		try {
+			window.__prefetcherLcp = null;
+
+			if (
+				!window.PerformanceObserver ||
+				!PerformanceObserver.supportedEntryTypes ||
+				!PerformanceObserver.supportedEntryTypes.includes(
+					"largest-contentful-paint",
+				)
+			) {
+				return;
+			}
+
+			// Create PerformanceObserver to listen for largest-contentful-paint events
+			const observer = new PerformanceObserver((entryList) => {
+				const entries = entryList.getEntries();
+				const last = entries[entries.length - 1] as any;
+				if (last) {
+					const value = last.renderTime || last.startTime;
+					if (typeof value === "number") {
+						// Record the latest LCP time
+						window.__prefetcherLcp = value;
+					}
+				}
+			});
+
+			// Use modern 'type' API with 'buffered' flag for accurate measurement
+			observer.observe({
+				type: "largest-contentful-paint",
+				buffered: true,
+			});
+		} catch (error) {
+			// Record script execution error
+			window.__prefetcherLcpError = error;
 		}
 	}
 
