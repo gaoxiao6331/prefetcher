@@ -101,11 +101,11 @@ async function runTest(browser, withPrefetch) {
 }
 
 async function main() {
-    console.log('╔════════════════════════════════════════════════╗');
-    console.log('║       Prefetch Performance Automation Test       ║');
-    console.log('╠════════════════════════════════════════════════╣');
-    console.log(`║  Test rounds per mode: ${TEST_ROUNDS}                     ║`);
-    console.log('╚════════════════════════════════════════════════╝');
+    console.log('╔══════════════════════════════════════════════════════════════╗');
+    console.log('║             Prefetch Performance Automation Test             ║');
+    console.log('╠══════════════════════════════════════════════════════════════╣');
+    console.log(`║  Test rounds per mode: ${TEST_ROUNDS.toString().padEnd(38)}║`);
+    console.log('╚══════════════════════════════════════════════════════════════╝');
     console.log('');
 
     const browser = await puppeteer.launch({
@@ -162,11 +162,11 @@ async function main() {
         };
 
         // Output results
-        console.log('\n╔════════════════════════════════════════════════╗');
-        console.log('║                 Test Results Summary               ║');
-        console.log('╠════════════════════════════════════════════════╣');
-        console.log('│ Metric        │ Prefetch    │ Normal Mode │ Improvement │');
-        console.log('├───────────────┼─────────────┼─────────────┼─────────────┤');
+        console.log('\n╔══════════════════════════════════════════════════════════╗');
+        console.log('║                   Test Results Summary                   ║');
+        console.log('╠═══════════════╤═════════════╤═════════════╤══════════════╣');
+        console.log('│ Metric        │ Prefetch    │ Normal Mode │ Improvement  │');
+        console.log('╟───────────────┼─────────────┼─────────────┼──────────────╢');
 
         const formatRow = (label, prefetchVal, normalVal) => {
             const pStr = prefetchVal ? `${prefetchVal.toFixed(0)} ms`.padEnd(11) : 'N/A'.padEnd(11);
@@ -174,7 +174,7 @@ async function main() {
             const improvement = (prefetchVal && normalVal)
                 ? `${((normalVal - prefetchVal) / normalVal * 100).toFixed(1)}%`.padStart(10)
                 : 'N/A'.padStart(10);
-            console.log(`│ ${label.padEnd(13)} │ ${pStr} │ ${nStr} │ ${improvement} │`);
+            console.log(`│ ${label.padEnd(13)} │ ${pStr} │ ${nStr} │ ${improvement}   │`);
         };
 
         formatRow('TTFB', stats.prefetch.avgTTFB, stats.normal.avgTTFB);
@@ -182,7 +182,7 @@ async function main() {
         formatRow('LCP', stats.prefetch.avgLCP, stats.normal.avgLCP);
         formatRow('Load Time', stats.prefetch.avgLoad, stats.normal.avgLoad);
 
-        console.log('╚════════════════════════════════════════════════╝');
+        console.log('╚═══════════════╧═════════════╧═════════════╧══════════════╝');
 
         // Summary
         if (stats.prefetch.avgLCP && stats.normal.avgLCP) {

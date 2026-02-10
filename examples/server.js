@@ -51,12 +51,14 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    let delay = 200; // delay 200 ms for js
-    if (url.endsWith('css')) { // for css
-        delay = 100;
-    } else if(!url.endsWith('js')) { // for html and other files
-        delay = 50;        
-    }
+    // let delay = 200; // delay 200 ms for js
+    // if (url.endsWith('css')) { // for css
+    //     delay = 100;
+    // } else if(!url.endsWith('js')) { // for html and other files
+    //     delay = 50;        
+    // }
+
+    const delay = 200;
 
     await new Promise(resolve => setTimeout(resolve, delay));
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} (fixed delay: ${delay}ms)`);
@@ -89,26 +91,30 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+    const width = 106;
+    const border = '═'.repeat(width);
+    const padLine = (text) => `║ ${text.padEnd(width - 2)} ║`;
+
     console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║          Prefetch Test Server Started                       ║
-╠═══════════════════════════════════════════════════════════╣
-║  Site A (No Prefetch):                                     ║
-║    http://localhost:${PORT}/a/                               ║
-║                                                            ║
-║  Site A (Prefetch Enabled):                                ║
-║    http://localhost:${PORT}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@examples/ex-res.js║
-║                                                            ║
-║  Site B:                                                   ║
-║    http://localhost:${PORT}/b/                               ║
-╠═══════════════════════════════════════════════════════════╣
-║  Test Steps:                                               ║
-║  1. Visit Site A (with or without Prefetch)                ║
-║  2. Click to visit Site B                                  ║
-║  3. Return to Site A to see the performance comparison     ║
-║                                                            ║
-║  Automated Test:                                           ║
-║    node examples/test-prefetch.js [number of tests]        ║
-╚═══════════════════════════════════════════════════════════╝
+╔${border}╗
+${padLine('          Prefetch Test Server Started')}
+╠${border}╣
+${padLine(' Site A (No Prefetch):')}
+${padLine(`   http://localhost:${PORT}/a/`)}
+${padLine('')}
+${padLine(' Site A (Prefetch Enabled):')}
+${padLine(`   http://localhost:${PORT}/a/?prefetch=https://cdn.jsdelivr.net/gh/gaoxiao6331/cdn-test@examples/ex-res.js`)}
+${padLine('')}
+${padLine(' Site B:')}
+${padLine(`   http://localhost:${PORT}/b/`)}
+╠${border}╣
+${padLine(' Test Steps:')}
+${padLine(' 1. Visit Site A (with or without Prefetch)')}
+${padLine(' 2. Click to visit Site B')}
+${padLine(' 3. Return to Site A to see the performance comparison')}
+${padLine('')}
+${padLine(' Automated Test:')}
+${padLine('   node examples/test-prefetch.js [number of tests]')}
+╚${border}╝
     `);
 });
