@@ -165,7 +165,9 @@ describe("AllJsService", () => {
 				],
 			} as unknown as GenerateContext;
 
-			const result = await (service as unknown as ServiceWithInternals).filter(ctx);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
 			expect(result.capturedResources).toHaveLength(1);
 			expect(result.capturedResources[0].type).toBe("script");
 		});
@@ -180,7 +182,9 @@ describe("AllJsService", () => {
 				],
 			} as unknown as GenerateContext;
 
-			const result = await (service as unknown as ServiceWithInternals).rank(ctx);
+			const result = await (service as unknown as ServiceWithInternals).rank(
+				ctx,
+			);
 			expect(result.capturedResources[0].url).toBe("large.js");
 			expect(result.capturedResources[1].url).toBe("medium.js");
 			expect(result.capturedResources[2].url).toBe("small.js");
@@ -205,13 +209,13 @@ describe("AllJsService", () => {
 			});
 
 			const capturePromise = service.captureResources(TEST_URL);
-			
+
 			// Allow microtasks to run and reach the setTimeout
 			for (let i = 0; i < 10; i++) await Promise.resolve();
-			
+
 			// Advance timers to bypass RESOURCE_READY_WAIT_MS
 			jest.advanceTimersByTime(5000);
-			
+
 			const resources = await capturePromise;
 			expect(resources).toContain(TEST_SCRIPT_URL);
 		}, 10000);
@@ -219,13 +223,13 @@ describe("AllJsService", () => {
 		test("should handle navigation errors gracefully", async () => {
 			mockPage.goto.mockRejectedValue(new Error("Navigation failed"));
 			const capturePromise = service.captureResources(TEST_URL);
-			
+
 			// Allow microtasks to run
 			for (let i = 0; i < 10; i++) await Promise.resolve();
-			
+
 			// Even if navigation fails, it might still wait or cleanup
 			jest.advanceTimersByTime(5000);
-			
+
 			const resources = await capturePromise;
 			expect(resources).toEqual([]);
 			expect(fastifyMock.log.error).toHaveBeenCalledWith(
@@ -244,7 +248,7 @@ describe("AllJsService", () => {
 
 			// Re-create service to trigger browser.on
 			service = (await AllJsService.create(fastifyMock)) as AllJsService;
-			
+
 			disconnectHandler();
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.stringContaining("disconnected"),

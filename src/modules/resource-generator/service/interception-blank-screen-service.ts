@@ -6,7 +6,7 @@ import AllJsService from "./all-js-service";
 
 class InterceptionBlankScreenService extends AllJsService {
 	/** Maximum concurrent validation tasks
-	 * 	⚠️ Opening multiple tabs will cause background tabs to be throttled, 
+	 * 	⚠️ Opening multiple tabs will cause background tabs to be throttled,
 	 * 	potentially leading to false positives in blank screen detection.
 	 */
 	private static readonly MAX_CONCURRENT_VALIDATIONS = 1;
@@ -38,82 +38,81 @@ class InterceptionBlankScreenService extends AllJsService {
 				await page.bringToFront();
 
 				// Intercept and block THIS specific resource
-					page.on(
-						"request",
-						bindAsyncContext((req) => {
-							try {
+				page.on(
+					"request",
+					bindAsyncContext((req) => {
+						try {
+							this.log.info(
+								`[InterceptionBlankScreenService] Request intercepted: ${req.url()}`,
+							);
+							if (req.isInterceptResolutionHandled()) {
 								this.log.info(
-									`[InterceptionBlankScreenService] Request intercepted: ${req.url()}`,
+									`[InterceptionBlankScreenService] Request already handled: ${req.url()}`,
 								);
-								if (req.isInterceptResolutionHandled()) {
-									this.log.info(
-										`[InterceptionBlankScreenService] Request already handled: ${req.url()}`,
-									);
-									return;
-								}
-
-								if (req.url() === resource.url) {
-									this.log.info(
-										`[InterceptionBlankScreenService] Aborting critical resource: ${req.url()}`,
-									);
-									req.abort().catch((err) => {
-										this.log.warn(
-											`[Interception] Abort failed for ${req.url()}: ${err}`,
-										);
-									});
-								} else {
-									this.log.info(
-										`[InterceptionBlankScreenService] Continuing non-critical resource: ${req.url()}`,
-									);
-									req.continue().catch((err) => {
-										this.log.warn(
-											`[Interception] Continue failed for ${req.url()}: ${err}`,
-										);
-									});
-								}
-							} catch (err) {
-								this.log.warn(`[Interception] Request handling failed: ${err}`);
+								return;
 							}
-						}),
+
+							if (req.url() === resource.url) {
+								this.log.info(
+									`[InterceptionBlankScreenService] Aborting critical resource: ${req.url()}`,
+								);
+								req.abort().catch((err) => {
+									this.log.warn(
+										`[Interception] Abort failed for ${req.url()}: ${err}`,
+									);
+								});
+							} else {
+								this.log.info(
+									`[InterceptionBlankScreenService] Continuing non-critical resource: ${req.url()}`,
+								);
+								req.continue().catch((err) => {
+									this.log.warn(
+										`[Interception] Continue failed for ${req.url()}: ${err}`,
+									);
+								});
+							}
+						} catch (err) {
+							this.log.warn(`[Interception] Request handling failed: ${err}`);
+						}
+					}),
+				);
+
+				try {
+					this.log.info(
+						`[InterceptionBlankScreenService] Calling page.goto for URL: ${ctx.url}`,
+					);
+					// Navigate and wait for content
+					await page.goto(ctx.url, {
+						waitUntil: "networkidle2",
+						timeout: 30000,
+					});
+					this.log.info(
+						`[InterceptionBlankScreenService] page.goto completed for URL: ${ctx.url}`,
 					);
 
-					try {
+					const { blank } = await this.isBlankScreen(page);
+					this.log.info(
+						`[InterceptionBlankScreenService] isBlankScreen result for ${ctx.url}: ${blank}`,
+					);
+					if (blank) {
 						this.log.info(
-							`[InterceptionBlankScreenService] Calling page.goto for URL: ${ctx.url}`,
+							`[Interception] Resource ${resource.url} is critical (causes blank screen)`,
 						);
-						// Navigate and wait for content
-						await page.goto(ctx.url, {
-							waitUntil: "networkidle2",
-							timeout: 30000,
-						});
-						this.log.info(
-							`[InterceptionBlankScreenService] page.goto completed for URL: ${ctx.url}`,
-						);
-
-						const { blank } = await this.isBlankScreen(page);
-						this.log.info(
-							`[InterceptionBlankScreenService] isBlankScreen result for ${ctx.url}: ${blank}`,
-						);
-						if (blank) {
-							this.log.info(
-								`[Interception] Resource ${resource.url} is critical (causes blank screen)`,
-							);
-							return true;
-						}
-						this.log.info(
-							`[Interception] Resource ${resource.url} is NOT critical`,
-						);
-						return false;
-					} catch (err) {
-						this.log.error(
-							err,
-							`[Interception] Failed to validate resource: ${resource.url}`,
-						);
-						// Keep it if we can't determine (safety first)
 						return true;
 					}
+					this.log.info(
+						`[Interception] Resource ${resource.url} is NOT critical`,
+					);
+					return false;
+				} catch (err) {
+					this.log.error(
+						err,
+						`[Interception] Failed to validate resource: ${resource.url}`,
+					);
+					// Keep it if we can't determine (safety first)
+					return true;
 				}
-			),
+			}),
 		);
 
 		const validationResults = await Promise.all(tasks);

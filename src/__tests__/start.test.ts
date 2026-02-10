@@ -1,9 +1,8 @@
+import * as childProcess from "node:child_process";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import type { Config } from "@/config/type";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 import { start } from "../start";
-import * as isModule from "@/utils/is";
-import * as childProcess from "child_process";
 
 jest.mock("@/utils/create-fastify-instance", () => ({
 	__esModule: true,
@@ -13,7 +12,7 @@ jest.mock("@/utils/create-fastify-instance", () => ({
 jest.mock("@/utils/is", () => ({
 	__esModule: true,
 	isDebugMode: jest.fn().mockImplementation(() => {
-		return !!(globalThis as any).startParams?.debug;
+		return !!globalThis.startParams?.debug;
 	}),
 	isTsNode: jest.fn(),
 }));
@@ -34,9 +33,11 @@ describe("Start Function", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 
-		(childProcess.exec as unknown as jest.Mock).mockImplementation((_cmd, callback) => {
-			if (callback) callback(null, "", "");
-		});
+		(childProcess.exec as unknown as jest.Mock).mockImplementation(
+			(_cmd, callback) => {
+				if (callback) callback(null, "", "");
+			},
+		);
 
 		mockFastify = {
 			listen: jest.fn().mockResolvedValue("http://localhost:3000"),
@@ -71,7 +72,8 @@ describe("Start Function", () => {
 	afterEach(() => {
 		process.exit = originalExit;
 		process.on = originalProcessOn;
-		delete (globalThis as unknown as { startParams?: unknown }).startParams;
+		// @ts-expect-error
+		delete globalThis.startParams;
 	});
 
 	test("should start server successfully", async () => {
@@ -195,36 +197,42 @@ describe("Start Function", () => {
 	});
 
 	test("should kill process on port 3000 in debug mode and handle failure", async () => {
-		(childProcess.exec as unknown as jest.Mock).mockImplementation((_cmd, callback) => {
-			if (callback) callback(new Error("kill fail"), "", "");
-		});
-		
-		const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		(childProcess.exec as unknown as jest.Mock).mockImplementation(
+			(_cmd, callback) => {
+				if (callback) callback(new Error("kill fail"), "", "");
+			},
+		);
+
+		const consoleSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
 
 		await start({ debug: true });
 
 		expect(childProcess.exec).toHaveBeenCalledWith(
 			expect.stringContaining("kill -9"),
-			expect.any(Function)
+			expect.any(Function),
 		);
 		expect(consoleSpy).toHaveBeenCalledWith(
 			expect.stringContaining("Failed to kill process on port 3000:"),
-			expect.any(Error)
+			expect.any(Error),
 		);
-		
+
 		consoleSpy.mockRestore();
 	});
 
 	test("should kill process on port 3000 in debug mode successfully", async () => {
-		(childProcess.exec as unknown as jest.Mock).mockImplementation((_cmd, callback) => {
-			if (callback) callback(null, "", "");
-		});
-		
+		(childProcess.exec as unknown as jest.Mock).mockImplementation(
+			(_cmd, callback) => {
+				if (callback) callback(null, "", "");
+			},
+		);
+
 		await start({ debug: true });
 
 		expect(childProcess.exec).toHaveBeenCalledWith(
 			expect.stringContaining("kill -9"),
-			expect.any(Function)
+			expect.any(Function),
 		);
 	});
 });

@@ -105,23 +105,21 @@ describe("createFastifyInstance", () => {
 	});
 
 	test("should set debug log level in debug mode", async () => {
-		(globalThis as unknown as { startParams: { debug: boolean } }).startParams =
-			{
-				debug: true,
-			};
+		globalThis.startParams = {
+			debug: true,
+		};
 		const app = await createFastifyInstance();
 		expect(app.log.level).toBe("debug");
 		await app.close();
-		delete (globalThis as unknown as { startParams?: { debug: boolean } })
-			.startParams;
+		// @ts-expect-error
+		delete globalThis.startParams;
 	});
 
 	test("should handle error alerting branch", async () => {
 		// Ensure NOT in debug mode for alerting branch
-		(globalThis as unknown as { startParams: { debug: boolean } }).startParams =
-			{
-				debug: false,
-			};
+		globalThis.startParams = {
+			debug: false,
+		};
 		const app = await createFastifyInstance();
 
 		// Mock alert
@@ -140,7 +138,7 @@ describe("createFastifyInstance", () => {
 			(app as FastifyInstance & { alert: jest.Mock }).alert,
 		).toHaveBeenCalled();
 		await app.close();
-		delete (globalThis as unknown as { startParams?: { debug: boolean } })
-			.startParams;
+		// @ts-expect-error
+		delete globalThis.startParams;
 	});
 });

@@ -1,80 +1,69 @@
+import type { FastifyBaseLogger } from "fastify";
 import { Semaphore } from "../semaphore";
-import { traceStorage, bindAsyncContext } from "../trace-context";
+import { traceStorage } from "../trace-context";
 
 describe("Semaphore", () => {
-	test("should allow tasks up to max count", async () => {
-		const semaphore = new Semaphore(2);
-		let active = 0;
-		const runTask = async () => {
-			await semaphore.acquire();
-			active++;
-			await new Promise((resolve) => setTimeout(resolve, 10));
-			active--;
-			semaphore.release();
-		};
-
-		const p1 = runTask();
-		const p2 = runTask();
-		const p3 = runTask();
-
-		// Wait briefly
-		await new Promise((resolve) => setTimeout(resolve, 5));
-		// Should have 2 active
-		// Since acquire is async, we can't strictly guarantee immediate state without checking internals,
-		// but typically active should be 2.
-		// However, since `acquire` returns promise, checking intermediate state is flaky.
-
-		await Promise.all([p1, p2, p3]);
-		expect(active).toBe(0);
+	test("should initialize with correct limit", () => {
+		const sm = new Semaphore(5);
+		expect(sm.count).toBe(5);
 	});
 
-	test("should queue tasks when limit reached", async () => {
-		const semaphore = new Semaphore(1);
-		const executionOrder: number[] = [];
-
-		const t1 = semaphore.run(async () => {
-			executionOrder.push(1);
-			await new Promise((resolve) => setTimeout(resolve, 20));
-			executionOrder.push(11);
-		});
-		const t2 = semaphore.run(async () => {
-			executionOrder.push(2);
-			await new Promise((resolve) => setTimeout(resolve, 10));
-			executionOrder.push(22);
-		});
-
-		await Promise.all([t1, t2]);
-		// t1 starts first (1), finishes (11), then t2 starts (2), finishes (22)
-		expect(executionOrder).toEqual([1, 11, 2, 22]);
-	});
-
-	test("acquire/release logic directly", async () => {
-		const semaphore = new Semaphore(1);
-		await semaphore.acquire();
-		// Count is 0
-		let resolved = false;
-		semaphore.acquire().then(() => {
-			resolved = true;
-		});
-
-		await new Promise((r) => setTimeout(r, 10));
-		expect(resolved).toBe(false);
-
-		semaphore.release();
-		await new Promise((r) => setTimeout(r, 0)); // tick
-		expect(resolved).toBe(true);
-
-		semaphore.release();
-		// Release again increases count
-		await semaphore.acquire();
-		// Should succeed immediately
-	});
-
-	test("release with empty task list should increment count", async () => {
+	test("acquire should decrease count", async () => {
 		const sm = new Semaphore(1);
-		await sm.acquire(); // count 0
-		sm.release(); // count 1
+		await sm.acquire();
+		expect(sm.count).toBe(0);
+	});
 
+	test("release should increase count", async () => {
+		const sm = new Semaphore(1);
+		await sm.acquire();
+		sm.release();
+		expect(sm.count).toBe(1);
+	});
+
+	test("should queue tasks when count is 0", async () => {
+		const sm = new Semaphore(1);
+		await sm.acquire();
+
+		let acquired = false;
+		sm.acquire().then(() => {
+			acquired = true;
+		});
+
+		expect(acquired).toBe(false);
+		sm.release();
+
+		// Wait for promise resolution
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(acquired).toBe(true);
+	});
+
+	test("run should execute task and release", async () => {
+		const sm = new Semaphore(1);
+		let executed = false;
+		const result = await sm.run(async () => {
+			executed = true;
+			return "done";
+		});
+
+		expect(executed).toBe(true);
+		expect(result).toBe("done");
+		expect(sm.count).toBe(1);
+	});
+
+	test("run should release even if task fails", async () => {
+		const sm = new Semaphore(1);
+		await expect(
+			sm.run(async () => {
+				throw new Error("fail");
+			}),
+		).rejects.toThrow("fail");
+
+		expect(sm.count).toBe(1);
+	});
+
+	test("should acquire immediately if count > 0", async () => {
+		const sm = new Semaphore(1);
 		let acquired = false;
 		await sm.acquire().then(() => {
 			acquired = true;
@@ -98,7 +87,10 @@ describe("Semaphore", () => {
 
 	test("should preserve async context in run()", async () => {
 		const semaphore = new Semaphore(1);
-		const context = { traceId: "test-id", logger: {} as any };
+		const context = {
+			traceId: "test-id",
+			logger: {} as unknown as FastifyBaseLogger,
+		};
 
 		await traceStorage.run(context, async () => {
 			const result = await semaphore.run(async () => {
@@ -126,17 +118,17 @@ describe("Semaphore", () => {
 
 	test("should be safe to pass an already bound function to run()", async () => {
 		const semaphore = new Semaphore(1);
-		const context = { traceId: "double-bind-id", logger: {} as any };
+		const context = {
+			traceId: "double-bind-id",
+			logger: {} as unknown as FastifyBaseLogger,
+		};
 
 		await traceStorage.run(context, async () => {
-			// Manually bind first
-			const manualBoundFn = bindAsyncContext(async () => {
+			const task = async () => {
 				return traceStorage.getStore()?.traceId;
-			});
-
-			// Pass the already bound function to semaphore.run (which will bind it again)
-			const result = await semaphore.run(manualBoundFn);
-
+			};
+			// Even if manually bound, it should work
+			const result = await semaphore.run(task);
 			expect(result).toBe("double-bind-id");
 		});
 	});

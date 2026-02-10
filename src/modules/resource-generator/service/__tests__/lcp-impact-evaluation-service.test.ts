@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { HTTPResponse } from "puppeteer";
 import puppeteer from "puppeteer";
 import type { CapturedResource, GenerateContext } from "../../type";
 import LcpImpactEvaluationService from "../lcp-impact-evaluation-service";
@@ -101,6 +102,10 @@ type ServiceWithInternals = {
 	) => Promise<number | null>;
 	setupDelayInterception: (page: MockPage, resourceUrl: string) => void;
 	setupLcpObserver: (page: MockPage) => Promise<void>;
+	normalizeUrl: (url: string) => string;
+	LCP_IMPACT_THRESHOLD_MS: number;
+	_checkLcpStatus: () => boolean;
+	_getLcpResult: () => { lcp: number | null; error: string | null };
 };
 
 interface MockRequest {
@@ -165,21 +170,25 @@ describe("LcpImpactEvaluationService", () => {
 				scriptFn = fn;
 			});
 
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 
-			const mockWindow: any = {
+			const mockWindow: Record<string, unknown> & {
+				__prefetcherLcp?: number;
+			} = {
 				PerformanceObserver: {
 					supportedEntryTypes: ["other-entry-type"],
 				},
 			};
 			const originalWindow = global.window;
-			(global as any).window = mockWindow;
+			(global as unknown as Record<string, unknown>).window = mockWindow;
 
 			try {
 				scriptFn();
 				expect(mockWindow.__prefetcherLcp).toBeNull();
 			} finally {
-				(global as any).window = originalWindow;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
 			}
 		});
 
@@ -189,21 +198,25 @@ describe("LcpImpactEvaluationService", () => {
 				scriptFn = fn;
 			});
 
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 
-			const mockWindow: any = {
+			const mockWindow: Record<string, unknown> & {
+				__prefetcherLcp?: number;
+			} = {
 				PerformanceObserver: {
-					supportedEntryTypes: null,
+					supportedEntryTypes: null as unknown as string[],
 				},
 			};
 			const originalWindow = global.window;
-			(global as any).window = mockWindow;
+			(global as unknown as Record<string, unknown>).window = mockWindow;
 
 			try {
 				scriptFn();
 				expect(mockWindow.__prefetcherLcp).toBeNull();
 			} finally {
-				(global as any).window = originalWindow;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
 			}
 		});
 	});
@@ -284,7 +297,9 @@ describe("LcpImpactEvaluationService", () => {
 			await Promise.resolve(); // Flush microtask queue
 
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				expect.stringMatching(/\[LCP\] Request handling failed for delayed resource: Continue failed/),
+				expect.stringMatching(
+					/\[LCP\] Request handling failed for delayed resource: Continue failed/,
+				),
 			);
 		});
 
@@ -327,7 +342,9 @@ describe("LcpImpactEvaluationService", () => {
 			};
 			await requestHandler(mockRequest);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				expect.stringMatching(/\[LCP\] Request listener error: Error: URL error/),
+				expect.stringMatching(
+					/\[LCP\] Request listener error: Error: URL error/,
+				),
 			);
 		});
 
@@ -470,10 +487,7 @@ describe("LcpImpactEvaluationService", () => {
 	describe("filter", () => {
 		test("should evaluate resource impact and filter non-critical ones", async () => {
 			const measureLcpInternalSpy = jest
-				.spyOn(
-					service as unknown as ServiceWithInternals,
-					"measureLcpInternal",
-				)
+				.spyOn(service as unknown as ServiceWithInternals, "measureLcpInternal")
 				.mockImplementation(async (_url, resourceUrl) => {
 					if (resourceUrl === TEST_RESOURCE_URL) return 25000; // Critical (> 10000 * 0.9)
 					return 5000; // Not critical
@@ -495,10 +509,7 @@ describe("LcpImpactEvaluationService", () => {
 
 		test("should treat resource as critical if its evaluation fails", async () => {
 			jest
-				.spyOn(
-					service as unknown as ServiceWithInternals,
-					"measureLcpInternal",
-				)
+				.spyOn(service as unknown as ServiceWithInternals, "measureLcpInternal")
 				.mockResolvedValue(null);
 
 			const resources = [
@@ -514,10 +525,7 @@ describe("LcpImpactEvaluationService", () => {
 
 		test("should treat resource as critical if error occurs during evaluation", async () => {
 			jest
-				.spyOn(
-					service as unknown as ServiceWithInternals,
-					"measureLcpInternal",
-				)
+				.spyOn(service as unknown as ServiceWithInternals, "measureLcpInternal")
 				.mockRejectedValue(new Error("Evaluation failed"));
 
 			const resources = [
@@ -541,12 +549,19 @@ describe("LcpImpactEvaluationService", () => {
 		});
 
 		test("should skip impact evaluation for main document", async () => {
-			const resources = [{ url: TEST_URL, type: "document" }] as CapturedResource[];
+			const resources = [
+				{ url: TEST_URL, type: "document" },
+			] as CapturedResource[];
 			const ctx = createMockContext(resources);
 
-			const measureSpy = jest.spyOn(service as any, "measureLcpInternal");
+			const measureSpy = jest.spyOn(
+				service as unknown as ServiceWithInternals,
+				"measureLcpInternal",
+			);
 
-			const result = await (service as any).filter(ctx);
+			const result = await (service as unknown as ServiceWithInternals).filter(
+				ctx,
+			);
 			expect(result.capturedResources).toHaveLength(0);
 			expect(measureSpy).not.toHaveBeenCalled();
 		});
@@ -613,7 +628,9 @@ describe("LcpImpactEvaluationService", () => {
 
 			expect(result).toBeNull();
 			expect(fastifyMock.log.error).toHaveBeenCalledWith(
-				expect.stringContaining("Browser-side error during LCP observation: LCP not found"),
+				expect.stringContaining(
+					"Browser-side error during LCP observation: LCP not found",
+				),
 			);
 		});
 
@@ -633,7 +650,9 @@ describe("LcpImpactEvaluationService", () => {
 		test("should not close page in debug mode", async () => {
 			(isDebugMode as jest.Mock).mockReturnValue(true);
 			try {
-				await (service as any).measureLcpInternal(TEST_URL);
+				await (service as unknown as ServiceWithInternals).measureLcpInternal(
+					TEST_URL,
+				);
 				expect(mockPage.close).not.toHaveBeenCalled();
 			} finally {
 				(isDebugMode as jest.Mock).mockReturnValue(false);
@@ -647,7 +666,9 @@ describe("LcpImpactEvaluationService", () => {
 				error: "LCP Timeout",
 			});
 
-			const result = await (service as any).measureLcpInternal(TEST_URL);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL);
 			expect(result).toBeNull();
 			expect(fastifyMock.log.debug).toHaveBeenCalledWith(
 				expect.stringContaining("Timeout waiting for LCP value"),
@@ -661,7 +682,9 @@ describe("LcpImpactEvaluationService", () => {
 				error: null,
 			});
 
-			const result = await (service as any).measureLcpInternal(TEST_URL);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL);
 			expect(result).toBe(5000);
 		});
 
@@ -671,10 +694,14 @@ describe("LcpImpactEvaluationService", () => {
 				error: "Script Error",
 			});
 
-			const result = await (service as any).measureLcpInternal(TEST_URL);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL);
 			expect(result).toBeNull();
 			expect(fastifyMock.log.error).toHaveBeenCalledWith(
-				expect.stringContaining("Browser-side error during LCP observation: Script Error"),
+				expect.stringContaining(
+					"Browser-side error during LCP observation: Script Error",
+				),
 			);
 		});
 
@@ -684,20 +711,27 @@ describe("LcpImpactEvaluationService", () => {
 				error: null,
 			});
 
-			const result = await (service as any).measureLcpInternal(TEST_URL);
+			const result = await (
+				service as unknown as ServiceWithInternals
+			).measureLcpInternal(TEST_URL);
 			expect(result).toBeNull();
 		});
 	});
 
 	describe("setupDelayInterception - response monitoring", () => {
 		test("should log warning for error response", async () => {
-			let responseHandler: (res: any) => void = () => {};
-			mockPage.on.mockImplementation((event: string, handler: any) => {
-				if (event === "response") responseHandler = handler;
-				return mockPage;
-			});
+			let responseHandler: (res: unknown) => void = () => {};
+			mockPage.on.mockImplementation(
+				(event: string, handler: (...args: unknown[]) => unknown) => {
+					if (event === "response") responseHandler = handler;
+					return mockPage;
+				},
+			);
 
-			await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
+			await (service as unknown as ServiceWithInternals).setupDelayInterception(
+				mockPage,
+				TEST_RESOURCE_URL,
+			);
 
 			const mockResponse = {
 				status: () => 404,
@@ -715,13 +749,18 @@ describe("LcpImpactEvaluationService", () => {
 		});
 
 		test("should not log warning for successful response", async () => {
-			let responseHandler: (res: any) => void = () => {};
-			mockPage.on.mockImplementation((event: string, handler: any) => {
-				if (event === "response") responseHandler = handler;
-				return mockPage;
-			});
+			let responseHandler: (res: unknown) => void = () => {};
+			mockPage.on.mockImplementation(
+				(event: string, handler: (...args: unknown[]) => unknown) => {
+					if (event === "response") responseHandler = handler;
+					return mockPage;
+				},
+			);
 
-			await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
+			await (service as unknown as ServiceWithInternals).setupDelayInterception(
+				mockPage,
+				TEST_RESOURCE_URL,
+			);
 
 			const mockResponse = {
 				status: () => 200,
@@ -739,12 +778,16 @@ describe("LcpImpactEvaluationService", () => {
 
 	describe("normalizeUrl", () => {
 		test("should return original URL if parsing fails", () => {
-			const result = (service as any).normalizeUrl("invalid-url");
+			const result = (service as unknown as ServiceWithInternals).normalizeUrl(
+				"invalid-url",
+			);
 			expect(result).toBe("invalid-url");
 		});
 
 		test("should remove hash from URL", () => {
-			const result = (service as any).normalizeUrl("http://example.com/#hash");
+			const result = (service as unknown as ServiceWithInternals).normalizeUrl(
+				"http://example.com/#hash",
+			);
 			expect(result).toBe("http://example.com/");
 		});
 	});
@@ -756,10 +799,14 @@ describe("LcpImpactEvaluationService", () => {
 				scriptFn = fn;
 			});
 
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 
 			// Mock window to throw error when PerformanceObserver is accessed
-			const mockWindow: any = {};
+			const mockWindow: Record<string, unknown> & {
+				__prefetcherLcpError?: Error;
+			} = {};
 			Object.defineProperty(mockWindow, "PerformanceObserver", {
 				get: () => {
 					throw new Error("Observer Error");
@@ -767,43 +814,59 @@ describe("LcpImpactEvaluationService", () => {
 			});
 
 			const originalWindow = global.window;
-			(global as any).window = mockWindow;
+			(global as unknown as Record<string, unknown>).window = mockWindow;
 
 			try {
 				scriptFn();
 				expect(mockWindow.__prefetcherLcpError).toBeDefined();
-				expect(mockWindow.__prefetcherLcpError.message).toBe("Observer Error");
+				expect(mockWindow.__prefetcherLcpError?.message).toBe("Observer Error");
 			} finally {
-				(global as any).window = originalWindow;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
 			}
 		});
 
 		test("should record LCP from PerformanceObserver", async () => {
 			let scriptFn: () => void = () => {};
-			let observerCallback: (list: any) => void = () => {};
+			let observerCallback: (list: {
+				getEntries: () => Array<{ renderTime?: number; startTime?: number }>;
+			}) => void = () => {};
 
 			mockPage.evaluateOnNewDocument.mockImplementation((fn: () => void) => {
 				scriptFn = fn;
 			});
 
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 
 			class MockPerformanceObserver {
-				constructor(cb: (list: any) => void) {
+				constructor(
+					cb: (list: {
+						getEntries: () => Array<{
+							renderTime?: number;
+							startTime?: number;
+						}>;
+					}) => void,
+				) {
 					observerCallback = cb;
 				}
 				observe() {}
 			}
-			(MockPerformanceObserver as any).supportedEntryTypes = ["largest-contentful-paint"];
+			(
+				MockPerformanceObserver as unknown as Record<string, unknown>
+			).supportedEntryTypes = ["largest-contentful-paint"];
 
-			const mockWindow: any = {
+			const mockWindow: Record<string, unknown> & {
+				__prefetcherLcp?: number;
+			} = {
 				PerformanceObserver: MockPerformanceObserver,
 			};
 
 			const originalWindow = global.window;
 			const originalPerformanceObserver = global.PerformanceObserver;
-			(global as any).window = mockWindow;
-			(global as any).PerformanceObserver = MockPerformanceObserver;
+			(global as unknown as Record<string, unknown>).window = mockWindow;
+			(global as unknown as Record<string, unknown>).PerformanceObserver =
+				MockPerformanceObserver;
 
 			try {
 				scriptFn();
@@ -833,23 +896,29 @@ describe("LcpImpactEvaluationService", () => {
 					getEntries: () => [mockEntry3],
 				});
 				expect(mockWindow.__prefetcherLcp).toBe(2345.67); // Should keep last valid value or not crash
-
 			} finally {
-				(global as any).window = originalWindow;
-				(global as any).PerformanceObserver = originalPerformanceObserver;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
+				(global as unknown as Record<string, unknown>).PerformanceObserver =
+					originalPerformanceObserver;
 			}
 		});
 	});
 
 	describe("setupLcpObserver", () => {
 		test("should call evaluateOnNewDocument", async () => {
-			await (service as unknown as ServiceWithInternals).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 			expect(mockPage.evaluateOnNewDocument).toHaveBeenCalled();
 		});
 
 		test("should handle setup error", async () => {
-			mockPage.evaluateOnNewDocument.mockRejectedValue(new Error("Setup failed"));
-			await (service as any).setupLcpObserver(mockPage);
+			mockPage.evaluateOnNewDocument.mockRejectedValue(
+				new Error("Setup failed"),
+			);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.any(Error),
 				"[LCP] Failed to set up LCP observer",
@@ -862,45 +931,47 @@ describe("LcpImpactEvaluationService", () => {
 				scriptFn = fn;
 			});
 
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 
 			// Test case 1: PerformanceObserver is missing
-			const mockWindow1: any = {
+			const mockWindow1: Record<string, unknown> = {
 				PerformanceObserver: undefined,
 			};
 			const originalWindow = global.window;
-			(global as any).window = mockWindow1;
+			(global as unknown as Record<string, unknown>).window = mockWindow1;
 			try {
 				scriptFn();
 				expect(mockWindow1.__prefetcherLcp).toBeNull();
 			} finally {
-				(global as any).window = originalWindow;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
 			}
 
 			// Test case 2: supportedEntryTypes is missing
-			const mockWindow2: any = {
+			const mockWindow2: Record<string, unknown> = {
 				PerformanceObserver: {},
 			};
-			(global as any).window = mockWindow2;
+			(global as unknown as Record<string, unknown>).window = mockWindow2;
 			try {
 				scriptFn();
 				expect(mockWindow2.__prefetcherLcp).toBeNull();
 			} finally {
-				(global as any).window = originalWindow;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
 			}
 
 			// Test case 3: largest-contentful-paint not in supportedEntryTypes
-			const mockWindow3: any = {
+			const mockWindow3: Record<string, unknown> = {
 				PerformanceObserver: {
 					supportedEntryTypes: ["other-entry-type"],
 				},
 			};
-			(global as any).window = mockWindow3;
+			(global as unknown as Record<string, unknown>).window = mockWindow3;
 			try {
 				scriptFn();
 				expect(mockWindow3.__prefetcherLcp).toBeNull();
 			} finally {
-				(global as any).window = originalWindow;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
 			}
 		});
 
@@ -910,27 +981,33 @@ describe("LcpImpactEvaluationService", () => {
 				scriptFn = fn;
 			});
 
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 
 			// Mock global window to throw error
-			const mockWindow: any = {
+			const mockWindow: Record<string, unknown> & {
+				__prefetcherLcpError?: Error;
+			} = {
 				get PerformanceObserver() {
 					throw new Error("Observer error");
 				},
 			};
 			const originalWindow = global.window;
-			(global as any).window = mockWindow;
+			(global as unknown as Record<string, unknown>).window = mockWindow;
 
 			try {
 				scriptFn();
 				expect(mockWindow.__prefetcherLcpError).toBeDefined();
 			} finally {
-				(global as any).window = originalWindow;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
 			}
 		});
 
 		test("should handle PerformanceObserver entry correctly", async () => {
-			let observerCallback: (entryList: any) => void = () => {};
+			let observerCallback: (entryList: {
+				getEntries: () => Array<{ renderTime?: number; startTime?: number }>;
+			}) => void = () => {};
 			const mockObserver = {
 				observe: jest.fn(),
 			};
@@ -940,25 +1017,33 @@ describe("LcpImpactEvaluationService", () => {
 				scriptFn = fn;
 			});
 
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 
 			// Mock global window and PerformanceObserver
-			const mockWindow: any = {
+			const mockWindow: Record<string, unknown> & {
+				__prefetcherLcp?: number;
+				PerformanceObserver: jest.Mock & { supportedEntryTypes?: string[] };
+			} = {
 				PerformanceObserver: jest.fn().mockImplementation((cb) => {
 					observerCallback = cb;
 					return mockObserver;
 				}),
 			};
-			mockWindow.PerformanceObserver.supportedEntryTypes = ["largest-contentful-paint"];
-			
+			mockWindow.PerformanceObserver.supportedEntryTypes = [
+				"largest-contentful-paint",
+			];
+
 			const originalWindow = global.window;
 			const originalPO = global.PerformanceObserver;
-			(global as any).window = mockWindow;
-			(global as any).PerformanceObserver = mockWindow.PerformanceObserver;
+			(global as unknown as Record<string, unknown>).window = mockWindow;
+			(global as unknown as Record<string, unknown>).PerformanceObserver =
+				mockWindow.PerformanceObserver;
 
 			try {
 				scriptFn();
-				
+
 				// Simulate entry
 				observerCallback({
 					getEntries: () => [{ renderTime: 1234 }],
@@ -971,8 +1056,9 @@ describe("LcpImpactEvaluationService", () => {
 				});
 				expect(mockWindow.__prefetcherLcp).toBe(5678);
 			} finally {
-				(global as any).window = originalWindow;
-				(global as any).PerformanceObserver = originalPO;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
+				(global as unknown as Record<string, unknown>).PerformanceObserver =
+					originalPO;
 			}
 		});
 
@@ -982,21 +1068,31 @@ describe("LcpImpactEvaluationService", () => {
 				scriptFn = fn;
 			});
 
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 
-			let observerCallback: (list: any) => void = () => {};
-			const mockWindow: any = {
+			let observerCallback: (list: {
+				getEntries: () => Array<{ renderTime?: unknown; startTime?: unknown }>;
+			}) => void = () => {};
+			const mockWindow: Record<string, unknown> & {
+				__prefetcherLcp?: number;
+				PerformanceObserver: jest.Mock & { supportedEntryTypes?: string[] };
+			} = {
 				PerformanceObserver: jest.fn().mockImplementation((cb) => {
 					observerCallback = cb;
 					return { observe: jest.fn() };
 				}),
 			};
-			mockWindow.PerformanceObserver.supportedEntryTypes = ["largest-contentful-paint"];
+			mockWindow.PerformanceObserver.supportedEntryTypes = [
+				"largest-contentful-paint",
+			];
 
 			const originalWindow = global.window;
 			const originalPO = global.PerformanceObserver;
-			(global as any).window = mockWindow;
-			(global as any).PerformanceObserver = mockWindow.PerformanceObserver;
+			(global as unknown as Record<string, unknown>).window = mockWindow;
+			(global as unknown as Record<string, unknown>).PerformanceObserver =
+				mockWindow.PerformanceObserver;
 
 			try {
 				scriptFn();
@@ -1004,8 +1100,9 @@ describe("LcpImpactEvaluationService", () => {
 				observerCallback({ getEntries: () => [] });
 				expect(mockWindow.__prefetcherLcp).toBeNull();
 			} finally {
-				(global as any).window = originalWindow;
-				(global as any).PerformanceObserver = originalPO;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
+				(global as unknown as Record<string, unknown>).PerformanceObserver =
+					originalPO;
 			}
 		});
 
@@ -1015,21 +1112,31 @@ describe("LcpImpactEvaluationService", () => {
 				scriptFn = fn;
 			});
 
-			await (service as any).setupLcpObserver(mockPage);
+			await (service as unknown as ServiceWithInternals).setupLcpObserver(
+				mockPage,
+			);
 
-			let observerCallback: (list: any) => void = () => {};
-			const mockWindow: any = {
+			let observerCallback: (list: {
+				getEntries: () => Array<{ renderTime?: unknown; startTime?: unknown }>;
+			}) => void = () => {};
+			const mockWindow: Record<string, unknown> & {
+				__prefetcherLcp?: number;
+				PerformanceObserver: jest.Mock & { supportedEntryTypes?: string[] };
+			} = {
 				PerformanceObserver: jest.fn().mockImplementation((cb) => {
 					observerCallback = cb;
 					return { observe: jest.fn() };
 				}),
 			};
-			mockWindow.PerformanceObserver.supportedEntryTypes = ["largest-contentful-paint"];
+			mockWindow.PerformanceObserver.supportedEntryTypes = [
+				"largest-contentful-paint",
+			];
 
 			const originalWindow = global.window;
 			const originalPO = global.PerformanceObserver;
-			(global as any).window = mockWindow;
-			(global as any).PerformanceObserver = mockWindow.PerformanceObserver;
+			(global as unknown as Record<string, unknown>).window = mockWindow;
+			(global as unknown as Record<string, unknown>).PerformanceObserver =
+				mockWindow.PerformanceObserver;
 
 			try {
 				scriptFn();
@@ -1039,8 +1146,9 @@ describe("LcpImpactEvaluationService", () => {
 				});
 				expect(mockWindow.__prefetcherLcp).toBeNull();
 			} finally {
-				(global as any).window = originalWindow;
-				(global as any).PerformanceObserver = originalPO;
+				(global as unknown as Record<string, unknown>).window = originalWindow;
+				(global as unknown as Record<string, unknown>).PerformanceObserver =
+					originalPO;
 			}
 		});
 	});
@@ -1048,28 +1156,34 @@ describe("LcpImpactEvaluationService", () => {
 	describe("normalizeUrl", () => {
 		test("should remove hash from URL", () => {
 			const url = "http://example.com/page#hash";
-			const result = (service as any).normalizeUrl(url);
+			const result = (service as unknown as ServiceWithInternals).normalizeUrl(
+				url,
+			);
 			expect(result).toBe("http://example.com/page");
 		});
 
 		test("should return original string if URL is invalid", () => {
 			const url = "invalid-url";
-			const result = (service as any).normalizeUrl(url);
+			const result = (service as unknown as ServiceWithInternals).normalizeUrl(
+				url,
+			);
 			expect(result).toBe("invalid-url");
 		});
 	});
 
 	describe("setupDelayInterception - extended", () => {
 		test("should log warning on 404 response", async () => {
-			let responseHandler: (res: any) => void = () => {};
-			mockPage.on.mockImplementation((event: string, handler: any) => {
-				if (event === "response") {
-					responseHandler = handler;
-				}
-				return mockPage;
-			});
+			let responseHandler: (res: unknown) => void = () => {};
+			mockPage.on.mockImplementation(
+				(event: string, handler: (...args: unknown[]) => unknown) => {
+					if (event === "response") {
+						responseHandler = handler;
+					}
+					return mockPage;
+				},
+			);
 
-			await (service as any).setupDelayInterception(
+			await (service as unknown as ServiceWithInternals).setupDelayInterception(
 				mockPage,
 				"http://example.com/delay",
 			);
@@ -1090,110 +1204,170 @@ describe("LcpImpactEvaluationService", () => {
 		});
 
 		test("should handle setup failure", async () => {
-			mockPage.setRequestInterception.mockRejectedValue(new Error("Interception error"));
-			await (service as any).setupDelayInterception(mockPage, "http://example.com");
+			mockPage.setRequestInterception.mockRejectedValue(
+				new Error("Interception error"),
+			);
+			await (service as unknown as ServiceWithInternals).setupDelayInterception(
+				mockPage,
+				"http://example.com",
+			);
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.any(Error),
 				"[LCP] Failed to set up delay interception",
 			);
 		});
-    describe("Static Browser Helpers", () => {
-      test("_checkLcpStatus should return true if __prefetcherLcp is not null", () => {
-        const mockWindow = { __prefetcherLcp: 1000, __prefetcherLcpError: null };
-        (global as any).window = mockWindow;
-        expect((LcpImpactEvaluationService as any)._checkLcpStatus()).toBe(true);
-        delete (global as any).window;
-      });
+		describe("Static Browser Helpers", () => {
+			test("_checkLcpStatus should return true if __prefetcherLcp is not null", () => {
+				const mockWindow = {
+					__prefetcherLcp: 1000,
+					__prefetcherLcpError: null,
+				};
+				(global as unknown as Record<string, unknown>).window = mockWindow;
+				expect(
+					(
+						LcpImpactEvaluationService as unknown as ServiceWithInternals
+					)._checkLcpStatus(),
+				).toBe(true);
+				delete (global as unknown as Record<string, unknown>).window;
+			});
 
-      test("_checkLcpStatus should return true if __prefetcherLcpError is set", () => {
-        const mockWindow = { __prefetcherLcp: null, __prefetcherLcpError: "Error" };
-        (global as any).window = mockWindow;
-        expect((LcpImpactEvaluationService as any)._checkLcpStatus()).toBe(true);
-        delete (global as any).window;
-      });
+			test("_checkLcpStatus should return true if __prefetcherLcpError is set", () => {
+				const mockWindow = {
+					__prefetcherLcp: null,
+					__prefetcherLcpError: "Error",
+				};
+				(global as unknown as Record<string, unknown>).window = mockWindow;
+				expect(
+					(
+						LcpImpactEvaluationService as unknown as ServiceWithInternals
+					)._checkLcpStatus(),
+				).toBe(true);
+				delete (global as unknown as Record<string, unknown>).window;
+			});
 
-      test("_checkLcpStatus should return false if both are null/empty", () => {
-        const mockWindow = { __prefetcherLcp: null, __prefetcherLcpError: null };
-        (global as any).window = mockWindow;
-        expect((LcpImpactEvaluationService as any)._checkLcpStatus()).toBe(false);
-        delete (global as any).window;
-      });
+			test("_checkLcpStatus should return false if both are null/empty", () => {
+				const mockWindow = {
+					__prefetcherLcp: null,
+					__prefetcherLcpError: null,
+				};
+				(global as unknown as Record<string, unknown>).window = mockWindow;
+				expect(
+					(
+						LcpImpactEvaluationService as unknown as ServiceWithInternals
+					)._checkLcpStatus(),
+				).toBe(false);
+				delete (global as unknown as Record<string, unknown>).window;
+			});
 
-      test("_getLcpResult should return LCP and null error", () => {
-        const mockWindow = { __prefetcherLcp: 1200, __prefetcherLcpError: null };
-        (global as any).window = mockWindow;
-        expect((LcpImpactEvaluationService as any)._getLcpResult()).toEqual({
-          lcp: 1200,
-          error: null,
-        });
-        delete (global as any).window;
-      });
+			test("_getLcpResult should return LCP and null error", () => {
+				const mockWindow = {
+					__prefetcherLcp: 1200,
+					__prefetcherLcpError: null,
+				};
+				(global as unknown as Record<string, unknown>).window = mockWindow;
+				expect(
+					(
+						LcpImpactEvaluationService as unknown as ServiceWithInternals
+					)._getLcpResult(),
+				).toEqual({
+					lcp: 1200,
+					error: null,
+				});
+				delete (global as unknown as Record<string, unknown>).window;
+			});
 
-      test("_getLcpResult should return error string if error exists", () => {
-        const mockWindow = { __prefetcherLcp: null, __prefetcherLcpError: new Error("Failed") };
-        (global as any).window = mockWindow;
-        expect((LcpImpactEvaluationService as any)._getLcpResult()).toEqual({
-          lcp: null,
-          error: "Error: Failed",
-        });
-        delete (global as any).window;
-      });
-    });
+			test("_getLcpResult should return error string if error exists", () => {
+				const mockWindow = {
+					__prefetcherLcp: null,
+					__prefetcherLcpError: new Error("Failed"),
+				};
+				(global as unknown as Record<string, unknown>).window = mockWindow;
+				expect(
+					(
+						LcpImpactEvaluationService as unknown as ServiceWithInternals
+					)._getLcpResult(),
+				).toEqual({
+					lcp: null,
+					error: "Error: Failed",
+				});
+				delete (global as unknown as Record<string, unknown>).window;
+			});
+		});
 
-    describe("setupDelayInterception additional coverage", () => {
-      test("should handle already handled request in request listener", async () => {
-        const mockReq = {
-          url: () => TEST_RESOURCE_URL,
-          isInterceptResolutionHandled: jest.fn().mockReturnValue(true),
-          resourceType: () => "script",
-          continue: jest.fn(),
-        } as unknown as MockRequest;
+		describe("setupDelayInterception additional coverage", () => {
+			test("should handle already handled request in request listener", async () => {
+				const mockReq = {
+					url: () => TEST_RESOURCE_URL,
+					isInterceptResolutionHandled: jest.fn().mockReturnValue(true),
+					resourceType: () => "script",
+					continue: jest.fn(),
+				} as unknown as MockRequest;
 
-        await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
-        
-        const requestHandler = mockPage.on.mock.calls.find(call => call[0] === "request")[1];
-        await requestHandler(mockReq);
+				await (
+					service as unknown as ServiceWithInternals
+				).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
 
-        expect(mockReq.continue).not.toHaveBeenCalled();
-      });
+				const requestHandler = mockPage.on.mock.calls.find(
+					(call) => call[0] === "request",
+				)[1];
+				await requestHandler(mockReq);
 
-      test("should handle already handled request after timeout", async () => {
-        jest.useFakeTimers();
-        const mockReq = {
-          url: () => TEST_RESOURCE_URL,
-          isInterceptResolutionHandled: jest.fn()
-            .mockReturnValueOnce(false) // First call in listener
-            .mockReturnValueOnce(true),  // Second call in timeout
-          resourceType: () => "script",
-          continue: jest.fn(),
-        } as unknown as MockRequest;
+				expect(mockReq.continue).not.toHaveBeenCalled();
+			});
 
-        await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
-        
-        const requestHandler = mockPage.on.mock.calls.find(call => call[0] === "request")[1];
-        await requestHandler(mockReq);
+			test("should handle already handled request after timeout", async () => {
+				jest.useFakeTimers();
+				const mockReq = {
+					url: () => TEST_RESOURCE_URL,
+					isInterceptResolutionHandled: jest
+						.fn()
+						.mockReturnValueOnce(false) // First call in listener
+						.mockReturnValueOnce(true), // Second call in timeout
+					resourceType: () => "script",
+					continue: jest.fn(),
+				} as unknown as MockRequest;
 
-        jest.advanceTimersByTime((LcpImpactEvaluationService as any).LCP_IMPACT_THRESHOLD_MS);
-        
-        expect(mockReq.continue).not.toHaveBeenCalled();
-        expect(fastifyMock.log.debug).toHaveBeenCalledWith(expect.stringContaining("Request already handled, skipping continue"));
-        jest.useRealTimers();
-      });
+				await (
+					service as unknown as ServiceWithInternals
+				).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
 
-      test("should handle response with status < 400 silently", async () => {
-        const mockRes = {
-          status: () => 200,
-          url: () => TEST_RESOURCE_URL,
-          request: () => ({ resourceType: () => "script" }),
-        } as any;
+				const requestHandler = mockPage.on.mock.calls.find(
+					(call) => call[0] === "request",
+				)[1];
+				await requestHandler(mockReq);
 
-        await (service as any).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
-        
-        const responseHandler = mockPage.on.mock.calls.find(call => call[0] === "response")[1];
-        responseHandler(mockRes);
+				jest.advanceTimersByTime(
+					(LcpImpactEvaluationService as unknown as ServiceWithInternals)
+						.LCP_IMPACT_THRESHOLD_MS,
+				);
 
-        expect(fastifyMock.log.warn).not.toHaveBeenCalledWith(expect.stringContaining("Browser resource error"));
-      });
-    });
-  });
+				expect(mockReq.continue).not.toHaveBeenCalled();
+				expect(fastifyMock.log.debug).toHaveBeenCalledWith(
+					expect.stringContaining("Request already handled, skipping continue"),
+				);
+				jest.useRealTimers();
+			});
+
+			test("should handle response with status < 400 silently", async () => {
+				const mockRes = {
+					status: () => 200,
+					url: () => TEST_RESOURCE_URL,
+					request: () => ({ resourceType: () => "script" }),
+				} as unknown as HTTPResponse;
+
+				await (
+					service as unknown as ServiceWithInternals
+				).setupDelayInterception(mockPage, TEST_RESOURCE_URL);
+
+				const responseHandler = mockPage.on.mock.calls.find(
+					(call) => call[0] === "response",
+				)[1];
+				responseHandler(mockRes);
+
+				expect(fastifyMock.log.warn).not.toHaveBeenCalledWith(
+					expect.stringContaining("Browser resource error"),
+				);
+			});
+		});
+	});
 });

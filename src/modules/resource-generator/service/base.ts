@@ -40,7 +40,9 @@ abstract class BaseService implements ResourceGeneratorService {
 
 	protected browser: Browser | null = null;
 	// Limit concurrent pages to avoid crashing the server
-	protected readonly semaphore = new Semaphore(BaseService.MAX_CONCURRENT_PAGES);
+	protected readonly semaphore = new Semaphore(
+		BaseService.MAX_CONCURRENT_PAGES,
+	);
 
 	constructor(protected readonly fastify: FastifyInstance) {}
 
@@ -240,7 +242,11 @@ abstract class BaseService implements ResourceGeneratorService {
 
 							const status = response.status();
 							// Only record successful requests (2xx)
-							if (status < BaseService.HTTP_STATUS_OK || status >= BaseService.HTTP_STATUS_MULTIPLE_CHOICES) return;
+							if (
+								status < BaseService.HTTP_STATUS_OK ||
+								status >= BaseService.HTTP_STATUS_MULTIPLE_CHOICES
+							)
+								return;
 
 							let resourceSizeKB = 0;
 							try {
@@ -269,10 +275,15 @@ abstract class BaseService implements ResourceGeneratorService {
 					}),
 				);
 
-				await page.goto(url, { waitUntil: "networkidle0", timeout: BaseService.DEFAULT_PAGE_GOTO_TIMEOUT_MS });
+				await page.goto(url, {
+					waitUntil: "networkidle0",
+					timeout: BaseService.DEFAULT_PAGE_GOTO_TIMEOUT_MS,
+				});
 
 				// wait for all resource loaded
-				await new Promise((resolve) => setTimeout(resolve, BaseService.RESOURCE_READY_WAIT_MS));
+				await new Promise((resolve) =>
+					setTimeout(resolve, BaseService.RESOURCE_READY_WAIT_MS),
+				);
 
 				const ctx: GenerateContext = {
 					url,

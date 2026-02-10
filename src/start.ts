@@ -1,9 +1,9 @@
+import { exec } from "node:child_process";
 import cdnUpdaterModule from "@/modules/cdn-updater";
 import notifierModule from "@/modules/notifier";
 import resourceGeneratorModule from "@/modules/resource-generator";
 import createFastifyInstance from "@/utils/create-fastify-instance";
 import { isDebugMode } from "@/utils/is";
-import { exec } from "child_process";
 
 export interface StartParams {
 	debug?: boolean;
@@ -12,7 +12,7 @@ export interface StartParams {
 export const start = async (params: StartParams) => {
 	globalThis.startParams = params;
 
-	if(isDebugMode()) {
+	if (isDebugMode()) {
 		// kill process on port 3000
 		try {
 			await new Promise((resolve, reject) => {

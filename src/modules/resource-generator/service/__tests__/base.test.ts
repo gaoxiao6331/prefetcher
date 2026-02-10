@@ -34,15 +34,19 @@ function createMockBrowser(connected = true) {
 	const mock = {
 		close: jest.fn().mockResolvedValue(undefined),
 		connected,
-		on: jest.fn().mockImplementation((event: string, handler: (...args: unknown[]) => unknown) => {
-			const set = handlers.get(event);
-			if (set) {
-				set.add(handler);
-			} else {
-				handlers.set(event, new Set([handler]));
-			}
-			return mock;
-		}),
+		on: jest
+			.fn()
+			.mockImplementation(
+				(event: string, handler: (...args: unknown[]) => unknown) => {
+					const set = handlers.get(event);
+					if (set) {
+						set.add(handler);
+					} else {
+						handlers.set(event, new Set([handler]));
+					}
+					return mock;
+				},
+			),
 		emit: (event: string, ...args: unknown[]) => {
 			const set = handlers.get(event);
 			if (set) {
@@ -60,15 +64,19 @@ function createMockBrowser(connected = true) {
 function createMockPage() {
 	const handlers = new Map<string, Set<(...args: unknown[]) => unknown>>();
 	const mock = {
-		on: jest.fn().mockImplementation((event: string, handler: (...args: unknown[]) => unknown) => {
-			const set = handlers.get(event);
-			if (set) {
-				set.add(handler);
-			} else {
-				handlers.set(event, new Set([handler]));
-			}
-			return mock;
-		}),
+		on: jest
+			.fn()
+			.mockImplementation(
+				(event: string, handler: (...args: unknown[]) => unknown) => {
+					const set = handlers.get(event);
+					if (set) {
+						set.add(handler);
+					} else {
+						handlers.set(event, new Set([handler]));
+					}
+					return mock;
+				},
+			),
 		emit: (event: string, ...args: unknown[]) => {
 			const set = handlers.get(event);
 			if (set) {
@@ -85,6 +93,9 @@ function createMockPage() {
 	return mock;
 }
 
+type MockPage = ReturnType<typeof createMockPage>;
+type MockBrowser = ReturnType<typeof createMockBrowser>;
+
 function createMockRequest(overrides = {}) {
 	return {
 		method: () => "GET",
@@ -97,8 +108,12 @@ function createMockRequest(overrides = {}) {
 	};
 }
 
-function createMockResponse(overrides: any = {}) {
-	const mockReq = createMockRequest(overrides.request ? overrides.request() : {});
+function createMockResponse(overrides: Record<string, unknown> = {}) {
+	const mockReq = createMockRequest(
+		overrides.request
+			? (overrides.request as () => Record<string, unknown>)()
+			: {},
+	);
 	return {
 		status: () => 200,
 		url: () => "http://example.com/script.js",
@@ -124,15 +139,17 @@ class TestService extends BaseService {
 
 	// Expose protected method for testing
 	public async triggerGetPage() {
-		return (
-			this as unknown as TestService & { getPage: () => Promise<unknown> }
-		).getPage();
+		return (this as unknown as ServiceWithInternals).getPage();
 	}
 }
 
 type ServiceWithInternals = {
 	browser: ReturnType<typeof createMockBrowser> | null;
 	initBrowser: () => Promise<void>;
+	getPage: () => Promise<{
+		page: ReturnType<typeof createMockPage>;
+		[Symbol.asyncDispose]: () => Promise<void>;
+	}>;
 };
 
 describe("BaseService", () => {
@@ -147,7 +164,7 @@ describe("BaseService", () => {
 		test("should create service instance correctly", async () => {
 			const mockBrowser = createMockBrowser(true);
 			(puppeteer.launch as jest.Mock).mockResolvedValue(mockBrowser);
-			
+
 			const service = await TestService.create(fastifyMock);
 			expect(service).toBeInstanceOf(TestService);
 			expect(puppeteer.launch).toHaveBeenCalled();
@@ -254,8 +271,8 @@ describe("BaseService", () => {
 
 	describe("Resource Capture", () => {
 		let service: TestService;
-		let mockPage: any;
-		let mockBrowser: any;
+		let mockPage: MockPage;
+		let mockBrowser: MockBrowser;
 
 		beforeEach(async () => {
 			jest.useFakeTimers();
@@ -263,7 +280,7 @@ describe("BaseService", () => {
 			mockPage = createMockPage();
 			mockBrowser = createMockBrowser(true);
 			mockBrowser.newPage.mockResolvedValue(mockPage);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 			(puppeteer.launch as jest.Mock).mockResolvedValue(mockBrowser);
 		});
 
@@ -292,13 +309,13 @@ describe("BaseService", () => {
 			});
 
 			const capturePromise = service.captureResources("http://example.com");
-			
+
 			// Allow all internal promises to settle up to the setTimeout
 			for (let i = 0; i < 10; i++) await Promise.resolve();
-			
+
 			// Advance timers to skip RESOURCE_READY_WAIT_MS
 			jest.advanceTimersByTime(5000);
-			
+
 			const resources = await capturePromise;
 			expect(resources).toHaveLength(1);
 			expect(resources[0]).toBe("http://example.com/script.js");
@@ -309,7 +326,7 @@ describe("BaseService", () => {
 			const mockBrowser = createMockBrowser(true);
 			const mockPage = createMockPage();
 			mockBrowser.newPage.mockResolvedValue(mockPage);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockRes = createMockResponse({
@@ -334,7 +351,7 @@ describe("BaseService", () => {
 			const mockBrowser = createMockBrowser(true);
 			const mockPage = createMockPage();
 			mockBrowser.newPage.mockResolvedValue(mockPage);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockRes = createMockResponse({
@@ -357,12 +374,12 @@ describe("BaseService", () => {
 		test("should handle navigation error", async () => {
 			mockPage.goto.mockRejectedValue(new Error("Navigation failed"));
 			const capturePromise = service.captureResources("http://example.com");
-			
+
 			const resources = await capturePromise;
 			expect(resources).toHaveLength(0);
 			expect(fastifyMock.log.error).toHaveBeenCalledWith(
 				expect.any(Error),
-				expect.stringContaining("Failed to capture resources")
+				expect.stringContaining("Failed to capture resources"),
 			);
 		});
 
@@ -383,7 +400,9 @@ describe("BaseService", () => {
 		test("should handle request interception error", async () => {
 			mockPage.goto.mockImplementation(async () => {
 				const mockReq = createMockRequest({
-					method: () => { throw new Error("Method error"); },
+					method: () => {
+						throw new Error("Method error");
+					},
 				});
 				mockPage.emit("request", mockReq);
 			});
@@ -392,7 +411,7 @@ describe("BaseService", () => {
 			jest.advanceTimersByTime(5000);
 			await capturePromise;
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				expect.stringContaining("Request interception failed")
+				expect.stringContaining("Request interception failed"),
 			);
 		});
 
@@ -407,7 +426,9 @@ describe("BaseService", () => {
 						headers: () => ({ "x-prefetcher-req-id": "1" }),
 						resourceType: () => "script",
 					}),
-					status: () => { throw new Error("Status error"); },
+					status: () => {
+						throw new Error("Status error");
+					},
 				});
 				mockPage.emit("response", mockRes);
 			});
@@ -416,7 +437,7 @@ describe("BaseService", () => {
 			jest.advanceTimersByTime(5000);
 			await capturePromise;
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
-				expect.stringContaining("Response processing failed")
+				expect.stringContaining("Response processing failed"),
 			);
 		});
 
@@ -452,13 +473,13 @@ describe("BaseService", () => {
 			mockPage.close.mockRejectedValue(new Error("Close error"));
 
 			await (async () => {
-				await using pageObj = await service.triggerGetPage();
+				await using _pageObj = await service.triggerGetPage();
 				// pageObj will be disposed here
 			})();
 
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
 				expect.any(Error),
-				"Failed to close page"
+				"Failed to close page",
 			);
 		});
 
@@ -467,19 +488,21 @@ describe("BaseService", () => {
 			const mockBrowser = createMockBrowser(true);
 			const mockPage = createMockPage();
 			mockBrowser.newPage.mockResolvedValue(mockPage);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockReq = createMockRequest({
-					isInterceptResolutionHandled: jest.fn()
+					isInterceptResolutionHandled: jest
+						.fn()
 						.mockReturnValueOnce(false) // First call in try block
 						.mockReturnValueOnce(false), // Second call in catch block
-					continue: jest.fn()
+					continue: jest
+						.fn()
 						.mockRejectedValueOnce(new Error("Continue error"))
 						.mockResolvedValueOnce(undefined),
 				});
 				mockPage.emit("request", mockReq);
-				
+
 				// Allow the catch block's continue().catch() to settle
 				await Promise.resolve();
 				await Promise.resolve();
@@ -499,13 +522,14 @@ describe("BaseService", () => {
 			const mockBrowser = createMockBrowser(true);
 			const mockPage = createMockPage();
 			mockBrowser.newPage.mockResolvedValue(mockPage);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockReq = createMockRequest({
-					isInterceptResolutionHandled: jest.fn()
+					isInterceptResolutionHandled: jest
+						.fn()
 						.mockReturnValueOnce(false) // First call in try block
-						.mockReturnValueOnce(true),  // Second call in catch block
+						.mockReturnValueOnce(true), // Second call in catch block
 					continue: jest.fn().mockImplementation(() => {
 						throw new Error("Initial continue error");
 					}),
@@ -526,7 +550,7 @@ describe("BaseService", () => {
 			const mockBrowser = createMockBrowser(true);
 			const mockPage = createMockPage();
 			mockBrowser.newPage.mockResolvedValue(mockPage);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockReq = createMockRequest({
@@ -547,7 +571,7 @@ describe("BaseService", () => {
 			const mockBrowser = createMockBrowser(true);
 			const mockPage = createMockPage();
 			mockBrowser.newPage.mockResolvedValue(mockPage);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockReq = createMockRequest();
@@ -575,7 +599,7 @@ describe("BaseService", () => {
 			const mockBrowser = createMockBrowser(true);
 			const mockPage = createMockPage();
 			mockBrowser.newPage.mockResolvedValue(mockPage);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 
 			mockPage.goto.mockImplementation(async () => {
 				const mockReq = createMockRequest();
@@ -600,13 +624,13 @@ describe("BaseService", () => {
 		test("should log error if browser close fails", async () => {
 			const service = new TestService(fastifyMock);
 			const mockBrowser = createMockBrowser(true);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 			mockBrowser.close.mockRejectedValue(new Error("Browser close error"));
 
 			await service.close();
 			expect(fastifyMock.log.error).toHaveBeenCalledWith(
 				expect.any(Error),
-				"Failed to close browser"
+				"Failed to close browser",
 			);
 		});
 	});
@@ -622,37 +646,45 @@ describe("BaseService", () => {
 
 	describe("Console Logging", () => {
 		let service: TestService;
-		let mockPage: any;
+		let mockPage: MockPage;
 
 		beforeEach(async () => {
 			service = new TestService(fastifyMock);
 			mockPage = createMockPage();
 			const mockBrowser = createMockBrowser(true);
 			mockBrowser.newPage.mockResolvedValue(mockPage);
-			(service as any).browser = mockBrowser;
+			(service as unknown as ServiceWithInternals).browser = mockBrowser;
 		});
 
 		test("should log browser errors", async () => {
-			await (service as any).getPage();
-			const consoleHandler = mockPage.on.mock.calls.find((call: any) => call[0] === "console")[1];
-			
+			await (service as unknown as ServiceWithInternals).getPage();
+			const consoleHandler = (mockPage.on as jest.Mock).mock.calls.find(
+				(call: [string, unknown]) => call[0] === "console",
+			)[1] as (msg: { type: () => string; text: () => string }) => void;
+
 			consoleHandler({ type: () => "error", text: () => "Test Error" });
-			expect(fastifyMock.log.error).toHaveBeenCalledWith("[Browser] Test Error");
+			expect(fastifyMock.log.error).toHaveBeenCalledWith(
+				"[Browser] Test Error",
+			);
 		});
 
 		test("should log browser warnings", async () => {
-			await (service as any).getPage();
-			const consoleHandler = mockPage.on.mock.calls.find((call: any) => call[0] === "console")[1];
-			
+			await (service as unknown as ServiceWithInternals).getPage();
+			const consoleHandler = (mockPage.on as jest.Mock).mock.calls.find(
+				(call: [string, unknown]) => call[0] === "console",
+			)[1] as (msg: { type: () => string; text: () => string }) => void;
+
 			consoleHandler({ type: () => "warn", text: () => "Test Warn" });
 			expect(fastifyMock.log.warn).toHaveBeenCalledWith("[Browser] Test Warn");
 		});
 
 		test("should log browser debug messages in debug mode", async () => {
 			(isDebugMode as jest.Mock).mockReturnValue(true);
-			await (service as any).getPage();
-			const consoleHandler = mockPage.on.mock.calls.find((call: any) => call[0] === "console")[1];
-			
+			await (service as unknown as ServiceWithInternals).getPage();
+			const consoleHandler = (mockPage.on as jest.Mock).mock.calls.find(
+				(call: [string, unknown]) => call[0] === "console",
+			)[1] as (msg: { type: () => string; text: () => string }) => void;
+
 			consoleHandler({ type: () => "log", text: () => "Test Log" });
 			expect(fastifyMock.log.debug).toHaveBeenCalledWith("[Browser] Test Log");
 			(isDebugMode as jest.Mock).mockReturnValue(false);
@@ -660,19 +692,23 @@ describe("BaseService", () => {
 
 		test("should not log browser debug messages if not in debug mode", async () => {
 			(isDebugMode as jest.Mock).mockReturnValue(false);
-			await (service as any).getPage();
-			const consoleHandler = mockPage.on.mock.calls.find((call: any) => call[0] === "console")[1];
-			
+			await (service as unknown as ServiceWithInternals).getPage();
+			const consoleHandler = (mockPage.on as jest.Mock).mock.calls.find(
+				(call: [string, unknown]) => call[0] === "console",
+			)[1] as (msg: { type: () => string; text: () => string }) => void;
+
 			consoleHandler({ type: () => "log", text: () => "Test Log" });
 			expect(fastifyMock.log.debug).not.toHaveBeenCalled();
 		});
 
 		test("should skip closing page if it is already closed during disposal", async () => {
-			await (service as any).getPage();
+			await (service as unknown as ServiceWithInternals).getPage();
 			mockPage.isClosed.mockReturnValue(true);
-			
+
 			await (async () => {
-				await using pageObj = await (service as any).getPage();
+				await using _pageObj = await (
+					service as unknown as ServiceWithInternals
+				).getPage();
 				// pageObj will be disposed here
 			})();
 
@@ -685,13 +721,17 @@ describe("BaseService", () => {
 			const service = new TestService(fastifyMock);
 			const mockBrowser = createMockBrowser(true);
 			(puppeteer.launch as jest.Mock).mockResolvedValue(mockBrowser);
-			
-			await (service as any).initBrowser();
-			expect((service as any).browser).toBe(mockBrowser);
-			
+
+			await (service as unknown as ServiceWithInternals).initBrowser();
+			expect((service as unknown as ServiceWithInternals).browser).toBe(
+				mockBrowser,
+			);
+
 			mockBrowser.emit("disconnected");
-			expect((service as any).browser).toBeNull();
-			expect(fastifyMock.log.warn).toHaveBeenCalledWith("Puppeteer browser disconnected");
+			expect((service as unknown as ServiceWithInternals).browser).toBeNull();
+			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
+				"Puppeteer browser disconnected",
+			);
 		});
 	});
 });

@@ -1,7 +1,7 @@
-import type { HTTPRequest, HTTPResponse, Page } from "puppeteer";
+import type { Page } from "puppeteer";
+import { isDebugMode } from "@/utils/is";
 import { Semaphore } from "@/utils/semaphore";
 import { bindAsyncContext } from "@/utils/trace-context";
-import { isDebugMode } from "@/utils/is";
 import type { CapturedResource, GenerateContext } from "../type";
 import AllJsService from "./all-js-service";
 
@@ -136,7 +136,9 @@ export class LcpImpactEvaluationService extends AllJsService {
 		// Disable cache to ensure resources are actually requested and intercepted
 		await page.setCacheEnabled(false);
 
-		const normalizedDelayUrl = delayResourceUrl ? this.normalizeUrl(delayResourceUrl) : undefined;
+		const normalizedDelayUrl = delayResourceUrl
+			? this.normalizeUrl(delayResourceUrl)
+			: undefined;
 
 		if (normalizedDelayUrl) {
 			await this.setupDelayInterception(page, normalizedDelayUrl);
@@ -146,7 +148,9 @@ export class LcpImpactEvaluationService extends AllJsService {
 		await this.setupLcpObserver(page);
 
 		try {
-			this.log.debug(`[LCP] Navigating to ${url}${delayResourceUrl ? ` with delay on ${delayResourceUrl}` : ""}`);
+			this.log.debug(
+				`[LCP] Navigating to ${url}${delayResourceUrl ? ` with delay on ${delayResourceUrl}` : ""}`,
+			);
 
 			// Navigate to the target page and wait for network idle
 			// networkidle0 will naturally wait for the delayed resource to finish
@@ -161,34 +165,42 @@ export class LcpImpactEvaluationService extends AllJsService {
 
 			// Wait for LCP value to be set by the observer
 			try {
-				await page.waitForFunction(
-					LcpImpactEvaluationService._checkLcpStatus,
-					{
-						timeout: LcpImpactEvaluationService.LCP_CHECK_TIMEOUT_MS,
-					},
-				);
+				await page.waitForFunction(LcpImpactEvaluationService._checkLcpStatus, {
+					timeout: LcpImpactEvaluationService.LCP_CHECK_TIMEOUT_MS,
+				});
 				this.log.debug(`[LCP] LCP value detected in window.__prefetcherLcp`);
 			} catch {
-				this.log.debug(`[LCP] Timeout waiting for LCP value in window.__prefetcherLcp`);
+				this.log.debug(
+					`[LCP] Timeout waiting for LCP value in window.__prefetcherLcp`,
+				);
 			}
 
 			// Give the browser a tiny bit more time to ensure all entries are in the buffer
-			await new Promise((resolve) => setTimeout(resolve, LcpImpactEvaluationService.FINAL_BUFFER_WAIT_MS));
+			await new Promise((resolve) =>
+				setTimeout(resolve, LcpImpactEvaluationService.FINAL_BUFFER_WAIT_MS),
+			);
 
-			const lcpResult = await page.evaluate(LcpImpactEvaluationService._getLcpResult);
+			const lcpResult = await page.evaluate(
+				LcpImpactEvaluationService._getLcpResult,
+			);
 
-			this.log.debug(`[LCP] Measurement details for ${url}: ${JSON.stringify(lcpResult)}`);
+			this.log.debug(
+				`[LCP] Measurement details for ${url}: ${JSON.stringify(lcpResult)}`,
+			);
 
 			const finalLcp = lcpResult.lcp;
-			
-			this.log.info(`[LCP] Final LCP for ${url} (delay: ${delayResourceUrl || "none"}): ${finalLcp}ms`);
-			
+
+			this.log.info(
+				`[LCP] Final LCP for ${url} (delay: ${delayResourceUrl || "none"}): ${finalLcp}ms`,
+			);
+
 			if (lcpResult.error) {
-				this.log.error(`[LCP] Browser-side error during LCP observation: ${lcpResult.error}`);
+				this.log.error(
+					`[LCP] Browser-side error during LCP observation: ${lcpResult.error}`,
+				);
 			}
 
 			return typeof finalLcp === "number" ? finalLcp : null;
-
 		} catch (error) {
 			this.log.error(error, `[LCP] Failed to navigate to page: ${url}`);
 			return null;
@@ -220,21 +232,26 @@ export class LcpImpactEvaluationService extends AllJsService {
 
 						const currentUrl = this.normalizeUrl(req.url());
 						if (currentUrl === normalizedTargetUrl) {
-							this.log.debug(`[LCP] Delaying resource: ${req.url()} (type: ${req.resourceType()}) for ${LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS}ms`);
-							// Delay and then release if it's the target resource
-							setTimeout(
-								() => {
-									if (req.isInterceptResolutionHandled()) {
-										this.log.debug(`[LCP] Request already handled, skipping continue: ${req.url()}`);
-										return;
-									}
-									this.log.debug(`[LCP] Releasing delayed resource: ${req.url()}`);
-									req.continue().catch((err: Error) => {
-										this.log.warn(`[LCP] Request handling failed for delayed resource: ${err.message} (${req.url()})`);
-									});
-								},
-								LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS,
+							this.log.debug(
+								`[LCP] Delaying resource: ${req.url()} (type: ${req.resourceType()}) for ${LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS}ms`,
 							);
+							// Delay and then release if it's the target resource
+							setTimeout(() => {
+								if (req.isInterceptResolutionHandled()) {
+									this.log.debug(
+										`[LCP] Request already handled, skipping continue: ${req.url()}`,
+									);
+									return;
+								}
+								this.log.debug(
+									`[LCP] Releasing delayed resource: ${req.url()}`,
+								);
+								req.continue().catch((err: Error) => {
+									this.log.warn(
+										`[LCP] Request handling failed for delayed resource: ${err.message} (${req.url()})`,
+									);
+								});
+							}, LcpImpactEvaluationService.LCP_IMPACT_THRESHOLD_MS);
 						} else {
 							// Continue other resources normally
 							req.continue().catch(() => {
@@ -248,11 +265,16 @@ export class LcpImpactEvaluationService extends AllJsService {
 			);
 
 			// Monitor responses to catch errors
-			page.on("response", bindAsyncContext((res) => {
-				if (res.status() >= 400) {
-					this.log.warn(`[LCP] Browser resource error: ${res.status()} ${res.url()} (Type: ${res.request().resourceType()})`);
-				}
-			}));
+			page.on(
+				"response",
+				bindAsyncContext((res) => {
+					if (res.status() >= 400) {
+						this.log.warn(
+							`[LCP] Browser resource error: ${res.status()} ${res.url()} (Type: ${res.request().resourceType()})`,
+						);
+					}
+				}),
+			);
 		} catch (error) {
 			this.log.warn(error, "[LCP] Failed to set up delay interception");
 		}
@@ -276,18 +298,18 @@ export class LcpImpactEvaluationService extends AllJsService {
 	 * Browser-side function to check if LCP value is available
 	 */
 	protected static _checkLcpStatus() {
-		const win = window as any;
-		return win.__prefetcherLcp !== null || !!win.__prefetcherLcpError;
+		return window.__prefetcherLcp !== null || !!window.__prefetcherLcpError;
 	}
 
 	/**
 	 * Browser-side function to retrieve LCP result
 	 */
 	protected static _getLcpResult() {
-		const win = window as any;
 		return {
-			lcp: win.__prefetcherLcp,
-			error: win.__prefetcherLcpError ? String(win.__prefetcherLcpError) : null,
+			lcp: window.__prefetcherLcp,
+			error: window.__prefetcherLcpError
+				? String(window.__prefetcherLcpError)
+				: null,
 		};
 	}
 
@@ -311,7 +333,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 			// Create PerformanceObserver to listen for largest-contentful-paint events
 			const observer = new PerformanceObserver((entryList) => {
 				const entries = entryList.getEntries();
-				const last = entries[entries.length - 1] as any;
+				const last = entries[entries.length - 1] as LargestContentfulPaint;
 				if (last) {
 					const value = last.renderTime || last.startTime;
 					if (typeof value === "number") {

@@ -786,16 +786,14 @@ describe("InterceptionBlankScreenService static methods", () => {
 
 		test("should handle missing document.elementsFromPoint", () => {
 			const original = document.elementsFromPoint;
-			(
-				document as unknown as { elementsFromPoint: unknown }
-			).elementsFromPoint = undefined;
+			(document as unknown as Record<string, unknown>).elementsFromPoint =
+				undefined;
 			const result = (
 				InterceptionBlankScreenService as unknown as ServiceWithInternals
 			)._evaluateDomBlankScreen();
 			expect(result.decided).toBe(false);
-			(
-				document as unknown as { elementsFromPoint: unknown }
-			).elementsFromPoint = original;
+			(document as unknown as Record<string, unknown>).elementsFromPoint =
+				original;
 		});
 
 		test("should return decided: false if blankRate is between 10 and 90", () => {

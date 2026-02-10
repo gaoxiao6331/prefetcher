@@ -1,8 +1,9 @@
+import type { StartParams } from "../../start";
 import { isDebugMode, isTsNode } from "../is";
 
 describe("is helper", () => {
-	const win = globalThis as unknown as { startParams?: { debug?: boolean } };
-	let originalStartParams: { debug?: boolean } | undefined;
+	const win = globalThis;
+	let originalStartParams: StartParams | undefined;
 	const tsNodeSymbol = Symbol.for("ts-node.register.instance");
 	type ProcessWithTsNode = NodeJS.Process & { [key: symbol]: unknown };
 	const processWithTsNode = process as ProcessWithTsNode;
@@ -14,12 +15,18 @@ describe("is helper", () => {
 	});
 
 	afterAll(() => {
-		win.startParams = originalStartParams;
+		if (originalStartParams) {
+			win.startParams = originalStartParams;
+		} else {
+			// @ts-expect-error
+			delete win.startParams;
+		}
 		processWithTsNode[tsNodeSymbol] = originalTsNodeInstance;
 	});
 
 	beforeEach(() => {
-		win.startParams = undefined;
+		// @ts-expect-error
+		delete win.startParams;
 		delete processWithTsNode[tsNodeSymbol];
 	});
 
