@@ -7,7 +7,7 @@
 
 const puppeteer = require('puppeteer');
 
-const BASE_URL = 'http://localhost:3001';
+const BASE_URL = 'https://gaoxiao6331.github.io/prefetcher-examples';
 const TEST_ROUNDS = parseInt(process.argv[2]) || 5; // Default to 5 tests per mode
 
 async function sleep(ms) {
