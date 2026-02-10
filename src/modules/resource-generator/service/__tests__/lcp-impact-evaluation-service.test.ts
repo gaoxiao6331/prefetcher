@@ -748,7 +748,7 @@ describe("LcpImpactEvaluationService", () => {
 			);
 		});
 
-		test("should not log warning for successful response", async () => {
+		test("should log warning for redirect response", async () => {
 			let responseHandler: (res: unknown) => void = () => {};
 			mockPage.on.mockImplementation(
 				(event: string, handler: (...args: unknown[]) => unknown) => {
@@ -757,9 +757,46 @@ describe("LcpImpactEvaluationService", () => {
 				},
 			);
 
+			const normalizedUrl = (
+				service as unknown as ServiceWithInternals
+			).normalizeUrl(TEST_RESOURCE_URL);
+
 			await (service as unknown as ServiceWithInternals).setupDelayInterception(
 				mockPage,
-				TEST_RESOURCE_URL,
+				normalizedUrl,
+			);
+
+			const mockResponse = {
+				status: () => 302,
+				url: () => "http://example.com/redirect.js",
+				request: () => ({
+					resourceType: () => "script",
+				}),
+			};
+
+			responseHandler(mockResponse);
+
+			expect(fastifyMock.log.warn).toHaveBeenCalledWith(
+				expect.stringContaining("[LCP] Browser resource redirect: 302"),
+			);
+		});
+
+		test("should log debug for successful response", async () => {
+			let responseHandler: (res: unknown) => void = () => {};
+			mockPage.on.mockImplementation(
+				(event: string, handler: (...args: unknown[]) => unknown) => {
+					if (event === "response") responseHandler = handler;
+					return mockPage;
+				},
+			);
+
+			const normalizedUrl = (
+				service as unknown as ServiceWithInternals
+			).normalizeUrl(TEST_RESOURCE_URL);
+
+			await (service as unknown as ServiceWithInternals).setupDelayInterception(
+				mockPage,
+				normalizedUrl,
 			);
 
 			const mockResponse = {
@@ -772,7 +809,9 @@ describe("LcpImpactEvaluationService", () => {
 
 			responseHandler(mockResponse);
 
-			expect(fastifyMock.log.warn).not.toHaveBeenCalled();
+			expect(fastifyMock.log.debug).toHaveBeenCalledWith(
+				expect.stringContaining("[LCP] Browser resource success: 200"),
+			);
 		});
 	});
 

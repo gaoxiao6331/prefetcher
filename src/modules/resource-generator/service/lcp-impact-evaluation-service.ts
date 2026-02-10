@@ -127,6 +127,11 @@ export class LcpImpactEvaluationService extends AllJsService {
 		url: string,
 		delayResourceUrl?: string,
 	): Promise<number | null> {
+		const normalizedPageUrl = this.normalizeUrl(url);
+		const normalizedDelayUrl = delayResourceUrl
+			? this.normalizeUrl(delayResourceUrl)
+			: undefined;
+
 		const pageObj = await this.getPage();
 		const page = pageObj.page as Page;
 
@@ -135,10 +140,6 @@ export class LcpImpactEvaluationService extends AllJsService {
 
 		// Disable cache to ensure resources are actually requested and intercepted
 		await page.setCacheEnabled(false);
-
-		const normalizedDelayUrl = delayResourceUrl
-			? this.normalizeUrl(delayResourceUrl)
-			: undefined;
 
 		if (normalizedDelayUrl) {
 			await this.setupDelayInterception(page, normalizedDelayUrl);
@@ -149,18 +150,18 @@ export class LcpImpactEvaluationService extends AllJsService {
 
 		try {
 			this.log.debug(
-				`[LCP] Navigating to ${url}${delayResourceUrl ? ` with delay on ${delayResourceUrl}` : ""}`,
+				`[LCP] Navigating to ${normalizedPageUrl}${normalizedDelayUrl ? ` with delay on ${normalizedDelayUrl}` : ""}`,
 			);
 
 			// Navigate to the target page and wait for network idle
 			// networkidle0 will naturally wait for the delayed resource to finish
-			await page.goto(url, {
+			await page.goto(normalizedPageUrl, {
 				waitUntil: "networkidle0",
 				timeout: LcpImpactEvaluationService.PAGE_GOTO_TIMEOUT_MS,
 			});
 
 			this.log.debug(
-				`[LCP] Page goto ready for ${url}. DelayResource: ${delayResourceUrl || "none"}`,
+				`[LCP] Page goto ready for ${normalizedPageUrl}. DelayResource: ${normalizedDelayUrl || "none"}`,
 			);
 
 			// Wait for LCP value to be set by the observer
@@ -185,13 +186,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 			);
 
 			this.log.debug(
-				`[LCP] Measurement details for ${url}: ${JSON.stringify(lcpResult)}`,
-			);
-
-			const finalLcp = lcpResult.lcp;
-
-			this.log.info(
-				`[LCP] Final LCP for ${url} (delay: ${delayResourceUrl || "none"}): ${finalLcp}ms`,
+				`[LCP] Measurement details for ${normalizedPageUrl}: ${JSON.stringify(lcpResult)}`,
 			);
 
 			if (lcpResult.error) {
@@ -200,13 +195,25 @@ export class LcpImpactEvaluationService extends AllJsService {
 				);
 			}
 
-			return typeof finalLcp === "number" ? finalLcp : null;
+			const finalLcp =
+				typeof lcpResult.lcp === "number" ? lcpResult.lcp : null;
+
+			this.log.info(
+				`[LCP] Final LCP for ${normalizedPageUrl} (delay: ${normalizedDelayUrl || "none"}): ${finalLcp != null ? `${finalLcp}ms` : "N/A"}`,
+			);
+
+			return finalLcp;
 		} catch (error) {
-			this.log.error(error, `[LCP] Failed to navigate to page: ${url}`);
+			this.log.error(
+				error,
+				`[LCP] Failed to navigate to page: ${normalizedPageUrl}`,
+			);
 			return null;
 		} finally {
 			if (isDebugMode()) {
-				this.log.debug(`[LCP] Debug mode: keeping page open for ${url}`);
+				this.log.debug(
+					`[LCP] Debug mode: keeping page open for ${normalizedPageUrl}`,
+				);
 			} else {
 				await pageObj[Symbol.asyncDispose]();
 			}
@@ -218,11 +225,9 @@ export class LcpImpactEvaluationService extends AllJsService {
 	 * @param page Puppeteer page instance
 	 * @param resourceUrl URL of the resource to delay
 	 */
-	private async setupDelayInterception(page: Page, resourceUrl: string) {
+	private async setupDelayInterception(page: Page, normalizedTargetUrl: string) {
 		try {
 			await page.setRequestInterception(true);
-
-			const normalizedTargetUrl = this.normalizeUrl(resourceUrl);
 
 			page.on(
 				"request",
@@ -272,6 +277,12 @@ export class LcpImpactEvaluationService extends AllJsService {
 						this.log.warn(
 							`[LCP] Browser resource error: ${res.status()} ${res.url()} (Type: ${res.request().resourceType()})`,
 						);
+					} else if(res.status() > 300) {
+						this.log.warn(
+							`[LCP] Browser resource redirect: ${res.status()} ${res.url()} (Type: ${res.request().resourceType()})`,
+						);
+					} else {
+						this.log.debug(	`[LCP] Browser resource success: ${res.status()} ${res.url()} (Type: ${res.request().resourceType()})`);
 					}
 				}),
 			);
@@ -316,7 +327,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 	/**
 	 * Browser-side function to set up PerformanceObserver for LCP
 	 */
-	protected static _setupLcpObserverInBrowser() {
+	protected static _setupLcpObserverInBrowser = () => {
 		try {
 			window.__prefetcherLcp = null;
 
