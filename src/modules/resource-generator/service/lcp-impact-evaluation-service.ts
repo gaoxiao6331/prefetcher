@@ -195,8 +195,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 				);
 			}
 
-			const finalLcp =
-				typeof lcpResult.lcp === "number" ? lcpResult.lcp : null;
+			const finalLcp = typeof lcpResult.lcp === "number" ? lcpResult.lcp : null;
 
 			this.log.info(
 				`[LCP] Final LCP for ${normalizedPageUrl} (delay: ${normalizedDelayUrl || "none"}): ${finalLcp != null ? `${finalLcp}ms` : "N/A"}`,
@@ -225,7 +224,10 @@ export class LcpImpactEvaluationService extends AllJsService {
 	 * @param page Puppeteer page instance
 	 * @param resourceUrl URL of the resource to delay
 	 */
-	private async setupDelayInterception(page: Page, normalizedTargetUrl: string) {
+	private async setupDelayInterception(
+		page: Page,
+		normalizedTargetUrl: string,
+	) {
 		try {
 			await page.setRequestInterception(true);
 
@@ -277,12 +279,14 @@ export class LcpImpactEvaluationService extends AllJsService {
 						this.log.warn(
 							`[LCP] Browser resource error: ${res.status()} ${res.url()} (Type: ${res.request().resourceType()})`,
 						);
-					} else if(res.status() > 300) {
+					} else if (res.status() > 300) {
 						this.log.warn(
 							`[LCP] Browser resource redirect: ${res.status()} ${res.url()} (Type: ${res.request().resourceType()})`,
 						);
 					} else {
-						this.log.debug(	`[LCP] Browser resource success: ${res.status()} ${res.url()} (Type: ${res.request().resourceType()})`);
+						this.log.debug(
+							`[LCP] Browser resource success: ${res.status()} ${res.url()} (Type: ${res.request().resourceType()})`,
+						);
 					}
 				}),
 			);
@@ -363,7 +367,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 			// Record script execution error
 			window.__prefetcherLcpError = error;
 		}
-	}
+	};
 
 	/**
 	 * Normalize URL by removing hash
