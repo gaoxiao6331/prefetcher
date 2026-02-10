@@ -68,7 +68,7 @@ export class LcpImpactEvaluationService extends AllJsService {
 						this.log.debug(
 							`[LCP] Skipping impact evaluation for main document: ${resource.url}`,
 						);
-						return false;
+						return true;
 					}
 
 					// Simulate delayed loading of the current resource and measure new LCP

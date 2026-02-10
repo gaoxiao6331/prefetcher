@@ -562,7 +562,7 @@ describe("LcpImpactEvaluationService", () => {
 			const result = await (service as unknown as ServiceWithInternals).filter(
 				ctx,
 			);
-			expect(result.capturedResources).toHaveLength(0);
+			expect(result.capturedResources).toHaveLength(1);
 			expect(measureSpy).not.toHaveBeenCalled();
 		});
 	});
