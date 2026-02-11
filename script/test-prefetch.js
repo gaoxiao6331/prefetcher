@@ -9,6 +9,7 @@ const puppeteer = require('puppeteer');
 
 const BASE_URL = 'https://gaoxiao6331.github.io/prefetcher-examples';
 const TEST_ROUNDS = parseInt(process.argv[2]) || 5; // Default to 5 tests per mode
+const PREFETCH_DELAY = parseInt(process.argv[3]) || 2000; // delay for prefetch
 
 async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -76,7 +77,7 @@ async function runTest(browser, withPrefetch) {
 
         // 2. If prefetch is enabled, wait for resources to be preloaded
         if (withPrefetch) {
-            await sleep(2000); // Wait for prefetch to complete
+            await sleep(PREFETCH_DELAY); // Wait for prefetch to complete
         }
 
         // 3. Set navigation mode flag
