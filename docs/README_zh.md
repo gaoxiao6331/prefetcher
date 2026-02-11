@@ -224,9 +224,7 @@ pnpm test src/modules/resource-generator/service/__tests__/lcp-impact-evaluation
 
 项目**分支覆盖率达到 100%**，但是大部分测试用例为AI生成，存在一定的局限性。
 
-TODO，添加覆盖率截图
-
-![覆盖率截图](./img/coverage.png)
+![覆盖率截图](./img/coverage.jpg)
 
 ## 📊 监控
 
