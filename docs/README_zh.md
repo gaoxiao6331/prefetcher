@@ -259,7 +259,8 @@ pnpm dev:debug
 ```bash
 # 运行自动化验证脚本
 # [rounds] 为测试轮次，默认为 5 轮
-node script/test-prefetch.js [rounds]
+# [delay] 为预取延迟时间，默认为 2000ms
+node script/test-prefetch.js [rounds] [delay]
 ```
 
 执行完成后，终端将输出对比表格，直观展示各项指标的提升百分比。

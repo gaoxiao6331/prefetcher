@@ -241,20 +241,13 @@ Debug mode features:
 
 ## 😃 Performance Verification
 
-The project provides automation scripts in the `script` directory to quantify the performance improvements brought by prefetching.
+The project provides automation scripts and detailed guides to quantify the performance improvements.
 
-### Verification Logic
-The script compares key metrics when navigating from Page A to Page B under two conditions: "Cold Start" (no prefetch) and "Prefetch Start" (with prefetched resources):
-- **TTFB** (Time to First Byte)
-- **FCP** (First Contentful Paint)
-- **LCP** (Largest Contentful Paint)
-- **Load Time** (Total page load time)
+For a step-by-step guide and sample results, please refer to the **[Performance Verification Guide](./docs/VERIFY.md)**.
 
-### Running Verification
+### Quick Start
 ```bash
 # Run the automation verification script
 # [rounds] is the number of test rounds, default is 5
 node script/test-prefetch.js [rounds]
 ```
-
-Upon completion, the terminal will display a comparison table showing the improvement percentage for each metric.
