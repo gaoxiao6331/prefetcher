@@ -17,8 +17,8 @@ Helps optimize web application performance by:
 ### Prerequisites
 
 - Node.js >= 20
-- pnpm
-- Git with SSH access
+- pnpm >= 10
+- GitHub repository with SSH access (for uploading resources)
 - Lark webhook tokens (optional, for notifications)
 
 ### Installation
@@ -77,6 +77,9 @@ pnpm dev:debug
 
 # Build production code
 pnpm build
+
+# Specify environment (reads config files under config/file)
+NODE_ENV=your-env
 
 # Start service
 pnpm start
@@ -145,19 +148,21 @@ curl -X POST http://localhost:3000/res_gen \
 ## 🏗️ Project Structure
 
 ```
-src/
-├── modules/
-│   ├── resource-generator/    # Captures resources using Puppeteer
-│   ├── cdn-updater/           # Manages GitHub + jsDelivr deployment
-│   └── notifier/              # Sends Lark notifications
-├── plugins/
-│   ├── config.ts             # Configuration management
-│   ├── monitor.ts            # Prometheus metrics
-│   └── alert.ts              # Error alerting
-├── utils/                    # Utility functions
-├── config/file/              # Environment configs
-├── index.ts                  # CLI entry
-└── start.ts                  # Server bootstrap
+├── script/                   # Automation tests and utility scripts
+├── src/
+│   ├── modules/
+│   │   ├── resource-generator/    # Captures resources using Puppeteer and analyzes core assets
+│   │   ├── cdn-updater/           # Manages GitHub + jsDelivr deployment
+│   │   └── notifier/              # Sends Lark notifications via webhooks
+│   ├── plugins/
+│   │   ├── config.ts             # Configuration management
+│   │   ├── monitor.ts            # Prometheus metrics
+│   │   └── alert.ts              # Error alerting
+│   ├── utils/                    # Utility functions
+│   ├── config/file/              # Environment configs
+│   ├── index.ts                  # CLI entry
+│   └── start.ts                  # Server bootstrap
+└── global.d.ts               # Global type definitions
 ```
 
 ### Core Components
@@ -219,7 +224,9 @@ pnpm test
 pnpm test src/modules/resource-generator/service/__tests__/lcp-impact-evaluation-service.test.ts
 ```
 
-The project uses Jest for rigorous unit and integration testing, achieving **100% branch coverage** to ensure the robustness of core logic.
+The project uses Jest for rigorous unit and integration testing, achieving **100% branch coverage**, but most test cases are AI-generated and have certain limitations.
+
+![Coverage Screenshot](./docs/img/coverage.jpg)
 
 ## 📊 Monitoring
 
@@ -241,13 +248,23 @@ Debug mode features:
 
 ## 😃 Performance Verification
 
-The project provides automation scripts and detailed guides to quantify the performance improvements.
+The project provides automation scripts in the `script` directory to quantify the performance improvements brought by prefetching.
 
-For a step-by-step guide and sample results, please refer to the **[Performance Verification Guide](./docs/VERIFY.md)**.
+### Verification Logic
+The script compares key metrics when navigating from Page A to Page B under two conditions: "Cold Start" (no prefetch) and "Prefetch Start" (with prefetched resources):
+- **TTFB** (Time to First Byte)
+- **FCP** (First Contentful Paint)
+- **LCP** (Largest Contentful Paint)
+- **Load Time** (Total page load time)
 
-### Quick Start
+### Running Verification
 ```bash
 # Run the automation verification script
 # [rounds] is the number of test rounds, default is 5
-node script/test-prefetch.js [rounds]
+# [delay] is the prefetch delay time, default is 2000ms
+node script/test-prefetch.js [rounds] [delay]
 ```
+
+Upon completion, the terminal will display a comparison table showing the improvement percentage for each metric.
+
+[Here](./docs/VERIFY.md) shows the effect in a DEMO project.
