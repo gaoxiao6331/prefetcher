@@ -2,7 +2,7 @@
 
 中文 | [English](../README.md)
 
-基于 Fastify 和 TypeScript 的资源预取服务。捕获网页资源并生成核心资源列表，上传到 CDN 供其他站点 Prefetch 使用，以此来减少跳转至该页面的加载时间。
+基于 Fastify 和 TypeScript 的资源预取服务。捕获网页资源并生成关键资源列表，上传到 CDN 供其他站点 Prefetch 使用，以此来减少跳转至该页面的加载时间。
 
 ## 🎯 项目目的
 
@@ -17,19 +17,14 @@
 ### 前置要求
 
 - Node.js >= 20
-- pnpm
-- 配置了 SSH 访问的 Git
+- pnpm >= 10
+- 配置了 SSH 访问的 GitHub 仓库（用于上传资源）
 - 飞书 webhook tokens（可选，用于通知）
 
 ### 安装
-
 ```bash
-git clone https://github.com/gaoxiao6331/prefetcher.git
-cd prefetcher
 pnpm install
-pnpm build
 ```
-
 ### 配置
 
 #### 环境变量
@@ -81,8 +76,21 @@ pnpm dev:debug
 # 构建生产代码
 pnpm build
 
+# 指定环境（读取config/file下的配置文件）
+NODE_ENV=your-env
+
 # 启动服务
 pnpm start
+```
+
+### Docker运行
+
+```bash
+# 构建镜像
+./build.sh
+
+# 启动容器
+docker run -p 3000:3000 prefetcher
 ```
 
 服务默认运行在 `http://localhost:3000`。
@@ -109,11 +117,11 @@ pnpm start
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `targetUrl` | string | 是 | 要分析的目标 URL |
-| `projectName` | string | 是 | GitHub 分支名称 |
-| `targetFileName` | string | 是 | 输出文件名 |
-| `template` | string | 否 | 包含 `__content_placeholder__` 占位符的模板字符串 |
-| `notifications` | string[] | 否 | 飞书 webhook tokens 数组 |
+| `targetUrl` | string | 是 | 要分析的目标 URL。 |
+| `projectName` | string | 是 | GitHub 分支名称（用于隔离不同项目的资源列表）。 |
+| `targetFileName` | string | 是 | 输出文件名（例如 `prefetch-resources.js`）。 |
+| `template` | string | 否 | 包含 `__content_placeholder__` 的模板。例如：`window.RESOURCES = __content_placeholder__;`。 |
+| `notifications` | string[] | 否 | 部署完成后接收通知的飞书 Webhook Token 列表。 |
 
 #### 响应
 
@@ -138,19 +146,21 @@ curl -X POST http://localhost:3000/res_gen \
 ## 🏗️ 项目结构
 
 ```
-src/
-├── modules/
-│   ├── resource-generator/    # 使用 Puppeteer 捕获资源，并分析核心资源
-│   ├── cdn-updater/           # 将资源上传至CDN，目前仅支持 GitHub + jsDelivr 部署
-│   └── notifier/              # 发送通知，目前仅支持飞书 webhook 通知
-├── plugins/
-│   ├── config.ts             # 配置管理
-│   ├── monitor.ts            # Prometheus 指标
-│   └── alert.ts              # 错误告警
-├── utils/                    # 工具函数
-├── config/file/              # 环境配置文件
-├── index.ts                  # CLI 入口
-└── start.ts                  # 服务器启动
+├── script/                   # 自动化测试与辅助脚本
+├── src/
+│   ├── modules/
+│   │   ├── resource-generator/    # 使用 Puppeteer 捕获资源，并分析核心资源
+│   │   ├── cdn-updater/           # 将资源上传至CDN，目前仅支持 GitHub + jsDelivr 部署
+│   │   └── notifier/              # 发送通知，目前仅支持飞书 webhook 通知
+│   ├── plugins/
+│   │   ├── config.ts             # 配置管理
+│   │   ├── monitor.ts            # Prometheus 指标
+│   │   └── alert.ts              # 错误告警
+│   ├── utils/                    # 工具函数
+│   ├── config/file/              # 环境配置文件
+│   ├── index.ts                  # CLI 入口
+│   └── start.ts                  # 服务器启动
+└── global.d.ts               # 全局类型定义
 ```
 
 ### 核心组件
@@ -172,44 +182,51 @@ src/
 
 ## 📋 资源捕获策略
 
-考虑到路由懒加载是常见的性能优化方案，页面会等待直到满足以下条件才认为"加载完成"：
+由于现代 Web 应用（如 React/Vue）广泛采用路由懒加载（Lazy Loading）和动态导入（Dynamic Import），仅监听 `load` 事件无法捕获到页面渲染所需的全部关键资源。
 
-- 网络连接数不超过 2 个
-- 这种状态持续至少 500 毫秒
+本服务使用 Puppeteer 的 `networkidle0` 策略来确保资源捕获的完整性：
+- **networkidle0**：当网络连接数在至少 500ms 内保持为 0 时，认为页面加载完成。
+- 相比 `networkidle2`（允许 2 个连接），该策略更严格，能更可靠地捕获到那些在首屏渲染后立即触发的异步资源。
 
-使用 Puppeteer 的 `networkidle2` 事件，而非 `load` 事件。
-
-> 具体实现见 `src/modules/resource-generator/service/base.ts`
+> 核心实现请参考 [base.ts](file:///Users/go/Code/prefetcher/src/modules/resource-generator/service/base.ts)
 
 ## 🎯 核心资源选取策略
 
-目前实现了以下几种策略：
+为了避免盲目预取导致的带宽浪费，本项目实现了如下选取策略：
 
-### 1. 全部JS（ALL-JS） 策略
-选择捕获的全部 JS 文件，按体积大小降序排序确定优先级。
+### 1. 全部 JS (ALL-JS)
+- **原理**：捕获页面加载的所有 JavaScript 文件。
+- **适用**：JS 驱动渲染为主的项目。
 
-### 2. 全部JS和CSS（ALL-JS-CSS） 策略
-选择捕获的 JS 和 CSS 文件，按体积大小降序排序确定优先级。
+### 2. 全部 JS & CSS (ALL-JS-CSS)
+- **原理**：同时捕获 JS 和 CSS 资源。
+- **适用**：样式依赖较重，且 CSS 对首屏有直接影响的项目。
 
-### 3. 拦截&白屏检测（INTERCEPTION & BLANK SCREEN DETECTION）策略
-每次请求拦截一个文件的加载，判断是否会导致白屏，从而确定是否为关键资源，并按体积大小降序排序确定优先级。
+### 3. 拦截 & 白屏检测 (Interception & Blank Screen Detection)
+- **原理**：采用排除法。模拟页面加载时逐个拦截候选资源，如果拦截后导致页面出现长时间白屏或渲染异常，则标记该资源为“核心资源”。
+- **适用**：对首屏资源精确度要求极高的场景。
 
-### 4.LCP影响评估（LCP Impact Evaluation）策略
-每次请求拦截一个文件的加载，判断是否会导致白屏，从而确定是否为关键资源，并按体积大小降序排序确定优先级。
+### 4. LCP 影响评估 (LCP Impact Evaluation)
+- **原理**：量化资源重要性。模拟延迟特定资源的加载，实时观测 LCP（最大内容绘制时间）指标。如果资源延迟导致 LCP 显著增加或超过预设阈值（如 10s），则判定为核心资源。
+- **优势**：基于真实用户性能指标进行评估，结果最符合性能优化目标。
 
-> **注意：** 实际使用的策略需要结合项目进行抉择，。
+> **提示**：建议根据业务场景的复杂程度选择最合适的策略。
 
 ## 🧪 测试
 
 ```bash
-# 运行所有测试
+# 执行全量测试
 pnpm test
 
-# 运行特定测试
-pnpm test -- path/to/test.ts
+# 执行特定模块测试
+pnpm test src/modules/resource-generator/service/__tests__/lcp-impact-evaluation-service.test.ts
 ```
 
-项目测试覆盖率为 **100%** (大部分测试用例为AI生成)。
+项目**分支覆盖率达到 100%**，但是大部分测试用例为AI生成，存在一定的局限性。
+
+TODO，添加覆盖率截图
+
+![覆盖率截图](./img/coverage.png)
 
 ## 📊 监控
 
@@ -230,7 +247,23 @@ pnpm dev:debug
 - 启用详细日志输出
 
 ## 😃 效果验证
-在examples目录下，存在两个Demo项目A和B，会测试从A跳转至B，prefetch和未prefetch的性能指标提升
-测试步骤
-node examples/server.js # 启动一个服务托管A、B项目的静态资源
-node test-prefetch.js 20 # 20是循环轮次，可不穿传，默认为5
+
+项目在 `script` 目录下提供了自动化验证脚本，用于量化预取带来的性能提升。
+
+### 验证逻辑
+脚本会对比“冷启动”（无预取）与“预取启动”（已加载预取资源）两种情况下，从 A 页面跳转至 B 页面时的关键指标：
+- **TTFB** (首字节时间)
+- **FCP** (首次内容绘制)
+- **LCP** (最大内容绘制)
+- **Load Time** (页面完全加载时间)
+
+### 执行验证
+```bash
+# 运行自动化验证脚本
+# [rounds] 为测试轮次，默认为 5 轮
+node script/test-prefetch.js [rounds]
+```
+
+执行完成后，终端将输出对比表格，直观展示各项指标的提升百分比。
+
+[这里](./VERIFY.md)展示了在一个DEMO项目中的效果。
