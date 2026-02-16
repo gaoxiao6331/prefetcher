@@ -42,6 +42,10 @@ COPY --from=builder --chown=pptruser:pptruser /app/package.json ./package.json
 # 4. Switch user
 # The official image defaults to pptruser, but we explicitly specify it to ensure correct permissions
 USER pptruser
+
+# 5. Add github.com to known hosts
+RUN mkdir -p -m 0700 /home/pptruser/.ssh \
+    && ssh-keyscan github.com >> /home/pptruser/.ssh/known_hosts
     
 EXPOSE 3000
     

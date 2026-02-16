@@ -4,7 +4,7 @@ const config: Config = {
 	port: 3000,
 	cdn: {
 		jsDelivr: {
-			localPath: "../cdn-test",
+			localPath: "~/Code/cdn-test",
 			// ssh is recommended, otherwise you need to login when server starts
 			remoteAddr: "git@github.com:gaoxiao6331/cdn-test.git",
 			git: {
