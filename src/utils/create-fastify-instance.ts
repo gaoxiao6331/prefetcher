@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import path from "node:path";
 import sensible from "@fastify/sensible";
 import Fastify from "fastify";
 import {
@@ -48,34 +47,30 @@ export default async function createFastifyInstance() {
 	const logLevel = isDebugMode() ? "debug" : "info";
 
 	const logTargets: pino.TransportTargetOptions[] = [
-		{
-			target: "pino-pretty",
+	];
+
+	try {
+		const pinoPretty = 'pino-pretty';
+		// This is a development dependency. It will be enabled if available, otherwise, it will be disabled.
+		await import(pinoPretty);
+		logTargets.push({
+			target: pinoPretty,
 			level: logLevel,
 			options: {
 				translateTime: "HH:MM:ss Z",
 				ignore: "pid,hostname",
 				colorize: true,
 			},
-		},
-	];
-
-	logTargets.push({
-		target: "pino-roll",
-		level: logLevel,
-		options: {
-			// Path to save log files
-			file: path.join("logs", "app.log"),
-			// Rotation frequency: 'daily', 'hourly', or millisecond value
-			frequency: "daily",
-			// Or rotate by size (e.g., 10MB)
-			// size: '1m',
-			mkdir: true,
-			// Maximum number of log files to retain
-			limit: {
-				count: 100,
-			},
-		},
-	});
+		});
+	} catch {
+		// add a standard JSON logging target to stdout without pino-pretty
+        logTargets.push({
+            target: 'pino/file',
+            level: logLevel,
+            options: { destination: 1 } // 1 represents process.stdout (standard output)
+        });
+        console.log('pino-pretty not installed, using standard JSON logging');
+	}
 
 	// 3. Initialize Fastify
 	const fastify = Fastify({

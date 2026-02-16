@@ -1,7 +1,7 @@
 # --- Stage 1: Build stage ---
-FROM node:18-bullseye-slim AS builder
+FROM node:20-bullseye-slim AS builder
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm@10
 WORKDIR /app
 
 # Set environment variables to prevent downloading redundant browsers during the build phase (saves space and time)
@@ -14,11 +14,12 @@ RUN pnpm install --frozen-lockfile
 # Copy source code and build
 COPY . .
 RUN pnpm build
+RUN CI=true pnpm prune --prod
     
 # --- Stage 2: Runtime stage ---
 # Directly use the official Puppeteer image, which is based on Debian and comes pre-installed with the latest Chrome and all necessary dependencies
 # This image includes Node.js and dumb-init by default
-FROM ghcr.io/puppeteer/puppeteer:latest
+FROM ghcr.io/puppeteer/puppeteer:24
     
 WORKDIR /app
 
@@ -41,6 +42,10 @@ COPY --from=builder --chown=pptruser:pptruser /app/package.json ./package.json
 # 4. Switch user
 # The official image defaults to pptruser, but we explicitly specify it to ensure correct permissions
 USER pptruser
+
+# 5. Add github.com to known hosts
+RUN mkdir -p -m 0700 /home/pptruser/.ssh \
+    && ssh-keyscan github.com >> /home/pptruser/.ssh/known_hosts
     
 EXPOSE 3000
     

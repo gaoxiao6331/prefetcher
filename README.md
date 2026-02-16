@@ -95,7 +95,7 @@ pnpm start
 docker run -p 3000:3000 prefetcher
 ```
 
-Server runs on `http://localhost:3000` by default.
+Server runs on `http://localhost:3000` by default. See `script/docker_run.sh` for a sample using Docker.
 
 ## 📖 Usage
 
