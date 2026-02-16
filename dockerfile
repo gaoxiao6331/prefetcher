@@ -14,6 +14,7 @@ RUN pnpm install --frozen-lockfile
 # Copy source code and build
 COPY . .
 RUN pnpm build
+RUN CI=true pnpm prune --prod
     
 # --- Stage 2: Runtime stage ---
 # Directly use the official Puppeteer image, which is based on Debian and comes pre-installed with the latest Chrome and all necessary dependencies
