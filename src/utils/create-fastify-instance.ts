@@ -48,16 +48,24 @@ export default async function createFastifyInstance() {
 	const logLevel = isDebugMode() ? "debug" : "info";
 
 	const logTargets: pino.TransportTargetOptions[] = [
-		{
-			target: "pino-pretty",
+	];
+
+	try {
+		const pinoPretty = 'pino-pretty';
+		// This is a development dependency. It will be enabled if available, otherwise, it will be disabled.
+		await import(pinoPretty);
+		logTargets.push({
+			target: pinoPretty,
 			level: logLevel,
 			options: {
 				translateTime: "HH:MM:ss Z",
 				ignore: "pid,hostname",
 				colorize: true,
 			},
-		},
-	];
+		});
+	} catch {
+		console.log('pino-pretty not installed, skip pretty logging');
+	}
 
 	logTargets.push({
 		target: "pino-roll",
