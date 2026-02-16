@@ -1,7 +1,7 @@
 # --- Stage 1: Build stage ---
-FROM node:18-bullseye-slim AS builder
+FROM node:20-bullseye-slim AS builder
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm
 WORKDIR /app
 
 # Set environment variables to prevent downloading redundant browsers during the build phase (saves space and time)
