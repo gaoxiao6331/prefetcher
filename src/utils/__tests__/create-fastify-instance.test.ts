@@ -104,6 +104,31 @@ describe("createFastifyInstance", () => {
 		await app.close();
 	});
 
+	test("should fallback to standard JSON logging when pino-pretty is missing", async () => {
+		jest.resetModules();
+		// Mock pino-pretty to throw error on import
+		jest.doMock("pino-pretty", () => {
+			throw new Error("Module not found");
+		});
+
+		// Re-mock plugins because resetModules clears the cache but we need the mocks to be applied to the new module instance
+		// However, top-level jest.mock factories are usually reused by Jest. 
+		// But let's verify.
+		// Actually, simpler approach:
+		
+		// We need to re-import the module under test
+		const { default: createFastifyInstanceReimported } = await import("../create-fastify-instance");
+		
+		const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+
+		const app = await createFastifyInstanceReimported();
+		expect(app).toBeDefined();
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("pino-pretty not installed"));
+
+		consoleSpy.mockRestore();
+		await app.close();
+	});
+
 	test("should set debug log level in debug mode", async () => {
 		globalThis.startParams = {
 			debug: true,
