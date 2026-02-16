@@ -93,7 +93,7 @@ pnpm start
 docker run -p 3000:3000 prefetcher
 ```
 
-服务默认运行在 `http://localhost:3000`。
+服务默认运行在 `http://localhost:3000`，在script/docker_run.sh有一个使用docker运行容器的示例。
 
 ## 📖 使用方法
 
