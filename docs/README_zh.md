@@ -265,4 +265,4 @@ node script/test-prefetch.js [rounds] [delay]
 
 执行完成后，终端将输出对比表格，直观展示各项指标的提升百分比。
 
-[这里](./VERIFY.md)展示了在一个DEMO项目中的效果。
+[这里](./VERIFY_zh.md)展示了在一个DEMO项目中的效果。
