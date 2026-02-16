@@ -1,7 +1,7 @@
 # --- Stage 1: Build stage ---
 FROM node:20-bullseye-slim AS builder
 
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10
 WORKDIR /app
 
 # Set environment variables to prevent downloading redundant browsers during the build phase (saves space and time)
@@ -19,7 +19,7 @@ RUN CI=true pnpm prune --prod
 # --- Stage 2: Runtime stage ---
 # Directly use the official Puppeteer image, which is based on Debian and comes pre-installed with the latest Chrome and all necessary dependencies
 # This image includes Node.js and dumb-init by default
-FROM ghcr.io/puppeteer/puppeteer:latest
+FROM ghcr.io/puppeteer/puppeteer:24
     
 WORKDIR /app
 
