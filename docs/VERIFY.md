@@ -5,8 +5,8 @@
 ### Demo Sites
 We have prepared two AI-generated Demo projects specifically for testing, deployed on GitHub Pages:
 - **[Demo Repository](https://github.com/gaoxiao6331/prefetcher-examples)**
-- **Site A (Entry Page)**: A static HTML page. It determines whether to enable the prefetching function based on the `prefetch` parameter in the URL.
-- **Site B (Target Page)**: A modern web application built with React + Rsbuild. When prefetching is enabled on Site A, Site B's critical resources will be pre-loaded.
+- **Site A (Entry Page)**: A static HTML page. It determines whether to enable prefetching based on the `prefetch` URL parameter.
+- **Site B (Target Page)**: A modern web application built with React + Rsbuild. When prefetching is enabled on Site A, the critical resources for Site B are pre-loaded.
 
 | Site A (Entry) | Site B (Target) |
 | :---: | :---: |
@@ -20,7 +20,7 @@ We have prepared two AI-generated Demo projects specifically for testing, deploy
 
 ## 🚀 Execution Flow
 
-The verification process consists of two steps: generating the latest resource list, and then running the automation test script to compare performance data.
+The verification process consists of two steps: generating the latest resource list, then running the automation test script to compare performance data.
 
 ### 1. Generate Critical Resource List
 Run `res_gen.sh` in the `script` directory. This script calls the prefetcher service to analyze Site B and uploads the core resource list to the CDN.
@@ -32,7 +32,7 @@ cd script
 ### 2. Run Automation Verification
 Use `test-prefetch.js` to perform multiple rounds of testing. The script automatically simulates both "No Prefetch" and "With Prefetch" scenarios and collects metrics.
 
-> **Note on Waiting Delay**: In the "With Prefetch" scenario, the script waits for a specific duration (controlled by parameters) after prefetching is triggered on Site A. This ensures that the prefetched resources are fully loaded before navigating to Site B, providing a realistic measure of the performance gain.
+> **Note on Waiting Delay**: In the "With Prefetch" scenario, the script waits for a specific duration (controlled by parameters) after prefetching is triggered on Site A. This ensures prefetched resources are fully loaded before navigating to Site B, providing a realistic measure of the performance gain.
 
 #### Standard Test (Default 2000ms Waiting Time)
 Run 20 rounds of testing to get stable average values, with a default wait of 2000ms to ensure resource prefetching is complete:
@@ -43,7 +43,7 @@ node test-prefetch.js 20
 ![Result](./img/result.jpg)
 
 #### Reduced Waiting Time Test (100ms Waiting Time)
-Test the scenario where the prefetch resource loading time is short under extreme conditions.
+Tests the scenario where prefetch resource loading time is short, simulating extreme conditions.
 ```bash
 # Argument 1: Number of test rounds (20)
 # Argument 2: Waiting delay before navigation (100ms)
