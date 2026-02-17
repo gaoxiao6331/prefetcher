@@ -9,8 +9,8 @@
 通过以下方式帮助优化 Web 应用性能：
 
 1. 使用 Puppeteer 分析网页，捕获加载的资源
-2. 基于策略生成核心资源列表，并上传至CDN
-3. 其他Web应用获取CDN资源，使用Prefetch预获取核心资源，减少跳转至该页面的加载时间
+2. 基于策略生成核心资源列表，并上传至 CDN
+3. 其他 Web 应用获取 CDN 资源，使用 Prefetch 预获取核心资源，减少跳转至该页面的加载时间
 
 ## 🚀 快速开始
 
@@ -93,7 +93,7 @@ pnpm start
 docker run -p 3000:3000 prefetcher
 ```
 
-服务默认运行在 `http://localhost:3000`，在script/docker_run.sh有一个使用docker运行容器的示例。
+服务默认运行在 `http://localhost:3000`，在 `script/docker_run.sh` 有一个使用 Docker 运行容器的示例。
 
 ## 📖 使用方法
 
@@ -150,8 +150,8 @@ curl -X POST http://localhost:3000/res_gen \
 ├── src/
 │   ├── modules/
 │   │   ├── resource-generator/    # 使用 Puppeteer 捕获资源，并分析核心资源
-│   │   ├── cdn-updater/           # 将资源上传至CDN，目前仅支持 GitHub + jsDelivr 部署
-│   │   └── notifier/              # 发送通知，目前仅支持飞书 webhook 通知
+│   │   ├── cdn-updater/           # 将资源上传至 CDN，目前仅支持 GitHub + jsDelivr 部署
+│   │   └── notifier/              # 发送通知，目前仅支持飞书 Webhook 通知
 │   ├── plugins/
 │   │   ├── config.ts             # 配置管理
 │   │   ├── monitor.ts            # Prometheus 指标
@@ -176,9 +176,9 @@ curl -X POST http://localhost:3000/res_gen \
 - 验证内容部署
 
 **通知器** (`src/modules/notifier/`)
-- 向飞书 webhook 发送消息
+- 向飞书 Webhook 发送消息
 - 失败请求重试，支持指数退避策略
-- 支持多个 webhook tokens
+- 支持多个 Webhook tokens
 
 ## 📋 资源捕获策略
 
@@ -222,7 +222,7 @@ pnpm test
 pnpm test src/modules/resource-generator/service/__tests__/lcp-impact-evaluation-service.test.ts
 ```
 
-项目**分支覆盖率达到 100%**，但是大部分测试用例为AI生成，存在一定的局限性。
+项目**分支覆盖率达到 100%**，但是大部分测试用例为 AI 生成，存在一定的局限性。
 
 ![覆盖率截图](./img/coverage.jpg)
 
@@ -265,4 +265,4 @@ node script/test-prefetch.js [rounds] [delay]
 
 执行完成后，终端将输出对比表格，直观展示各项指标的提升百分比。
 
-[这里](./VERIFY_zh.md)展示了在一个DEMO项目中的效果。
+[这里](./VERIFY_zh.md)展示了在一个 Demo 项目中的效果。

@@ -3,7 +3,7 @@
 ## 🧪 验证环境与 Demo
 
 ### Demo 站点
-我们准备了两个AI生成的测试的 Demo 项目，并部署在 GitHub Pages 上：
+我们准备了两个 AI 生成的 Demo 项目，并部署在 GitHub Pages 上：
 - **[Demo 仓库地址](https://github.com/gaoxiao6331/prefetcher-examples)**
 - **站点 A (入口页)**：一个静态 HTML 页面。它会根据 URL 中的 `prefetch` 参数决定是否开启预取功能。
 - **站点 B (目标页)**：一个基于 React + Rsbuild 构建的现代 Web 应用。当站点 A 开启预取时，会提前加载站点 B 的关键资源。
